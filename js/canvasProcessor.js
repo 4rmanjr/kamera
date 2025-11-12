@@ -17,7 +17,18 @@ export class CanvasProcessorService {
     async capture() {
         const vid = this.dom.video;
         const cvs = this.dom.canvas;
+        
+        // Check if required DOM elements exist
+        if (!vid || !cvs) {
+            console.error('Video or canvas element not found for capture');
+            return;
+        }
+        
         const ctx = cvs.getContext('2d');
+        if (!ctx) {
+            console.error('Unable to get canvas context for capture');
+            return;
+        }
 
         // Optimasi ukuran canvas untuk kinerja
         let canvasWidth = vid.videoWidth;
@@ -53,8 +64,9 @@ export class CanvasProcessorService {
         // Optimasi penghitungan ukuran teks
         const baseSize = Math.max(20, Math.floor(canvasHeight / 35));
         let fontSize = baseSize;
-        if (this.state.settings.textSize === 's') fontSize = baseSize * 0.8;
-        if (this.state.settings.textSize === 'l') fontSize = baseSize * 1.4;
+        if (this.state.settings.textSize === 's') fontSize = baseSize * 0.5;
+        if (this.state.settings.textSize === 'm') fontSize = baseSize * 0.8;
+        if (this.state.settings.textSize === 'l') fontSize = baseSize * 1.0;
         const margin = Math.floor(fontSize * 1.2);
         const lineHeight = fontSize * 1.3;
 
@@ -202,8 +214,8 @@ export class CanvasProcessorService {
                     const baseSize = Math.max(120, Math.floor(canvasHeight / 6)); // Minimal 120px untuk scan yang lebih baik
                     let qrSize = baseSize;
 
-                    if (this.state.settings.qrCodeSize === 's') qrSize = baseSize * 1.2; // JAUH lebih besar dari sebelumnya
-                    if (this.state.settings.qrCodeSize === 'l') qrSize = baseSize * 2.0; // JAUH lebih besar lagi
+                    if (this.state.settings.qrCodeSize === 's') qrSize = baseSize * 0.8; // Kecil
+                    if (this.state.settings.qrCodeSize === 'l') qrSize = baseSize * 1.2; // Besar
 
                     // Tentukan posisi QR code - gunakan margin kecil untuk membuat lebih ke pojok
                     const margin = Math.floor(qrSize * 0.1); // Margin kecil untuk membuat QR code lebih ke pojok

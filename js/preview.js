@@ -13,23 +13,36 @@ export class PreviewController {
     }
 
     open(photo) {
-        this.state.currentPhotoId = photo.id; 
+        this.state.currentPhotoId = photo.id;
         this.state.currentPhotoSrc = photo.data;
-        this.dom.imgPreview.src = photo.data; 
-        this.dom.modals.preview.classList.remove('hidden');
+        if (this.dom.imgPreview) {
+            this.dom.imgPreview.src = photo.data;
+        }
+        if (this.dom.modals && this.dom.modals.preview) {
+            this.dom.modals.preview.classList.remove('hidden');
+        }
     }
 
     close() {
-        this.dom.modals.preview.classList.add('hidden'); 
-        this.dom.imgPreview.src = '';
+        if (this.dom.modals && this.dom.modals.preview) {
+            this.dom.modals.preview.classList.add('hidden');
+        }
+        if (this.dom.imgPreview) {
+            this.dom.imgPreview.src = '';
+        }
     }
 
     download() {
-        const link = document.createElement('a'); 
+        if (!this.state.currentPhotoSrc) {
+            console.error('No photo to download');
+            return;
+        }
+        
+        const link = document.createElement('a');
         link.download = `GeoCam_${Date.now()}.jpg`;
-        link.href = this.state.currentPhotoSrc; 
+        link.href = this.state.currentPhotoSrc;
         document.body.appendChild(link);
-        link.click(); 
+        link.click();
         document.body.removeChild(link);
     }
 }

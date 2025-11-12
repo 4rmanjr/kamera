@@ -22,23 +22,30 @@ export class CameraService {
                 }, 
                 audio: false 
             });
-            this.dom.video.srcObject = this.state.stream;
-            this.dom.video.style.transform = (this.state.facingMode === 'user') ? 'scaleX(-1)' : 'scaleX(1)';
+            
+            // Check if video element exists before setting properties
+            if (this.dom.video) {
+                this.dom.video.srcObject = this.state.stream;
+                this.dom.video.style.transform = (this.state.facingMode === 'user') ? 'scaleX(-1)' : 'scaleX(1)';
+            }
+            
             setTimeout(() => this.checkCapabilities(), 500);
         } catch (err) {
             console.error(err);
-            this.dom.lblGeo.innerHTML = `<i class="ph ph-warning text-red-400" aria-hidden="true"></i> Error: Kamera Ditolak`;
+            if (this.dom.lblGeo) {
+                this.dom.lblGeo.innerHTML = `<i class="ph ph-warning text-red-400" aria-hidden="true"></i> Error: Kamera Ditolak`;
+            }
         }
     }
 
     checkCapabilities() {
-        try { 
-            const caps = this.state.stream.getVideoTracks()[0].getCapabilities(); 
-            this.state.hasFlash = !!caps.torch; 
-        } catch(e) { 
-            this.state.hasFlash = false; 
+        try {
+            const caps = this.state.stream.getVideoTracks()[0].getCapabilities();
+            this.state.hasFlash = !!caps.torch;
+        } catch(e) {
+            this.state.hasFlash = false;
         }
-        this.state.isFlashOn = false; 
+        this.state.isFlashOn = false;
         this.updateFlashUI();
     }
 
@@ -75,8 +82,24 @@ export class CameraService {
 
     async shutter() {
         if(navigator.vibrate) navigator.vibrate(50);
-        this.dom.flashOverlay.classList.add('flash-active');
-        setTimeout(() => this.dom.flashOverlay.classList.remove('flash-active'), 150);
+        if (this.dom.flashOverlay) {
+            this.dom.flashOverlay.classList.add('flash-active');
+            setTimeout(() => {
+                if (this.dom.flashOverlay) {
+                    this.dom.flashOverlay.classList.remove('flash-active');
+                }
+            }, 150);
+        }
         await this.canvasProcessorService.capture();
+    }
+    
+    /**
+     * Cleanup camera resources
+     */
+    destroy() {
+        if (this.state.stream) {
+            this.state.stream.getTracks().forEach(track => track.stop());
+            this.state.stream = null;
+        }
     }
 }

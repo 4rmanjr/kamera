@@ -4,30 +4,58 @@
  */
 
 export const DOM = {
-    video: document.getElementById('video-feed'),
-    canvas: document.getElementById('canvas-process'),
-    flashOverlay: document.getElementById('shutter-flash'),
-    lblGeo: document.getElementById('lbl-geo'),
-    lblTime: document.getElementById('lbl-time'),
-    btnShutter: document.getElementById('btn-shutter'),
-    btnSwitch: document.getElementById('btn-switch-cam'),
-    btnFlash: document.getElementById('btn-flash'),
-    iconFlash: document.getElementById('icon-flash'),
-    btnGallery: document.getElementById('btn-gallery'),
-    imgThumb: document.getElementById('img-thumb'),
-    iconGallery: document.getElementById('icon-gallery'),
-    btnSettings: document.getElementById('btn-settings'),
+    video: null,
+    canvas: null,
+    flashOverlay: null,
+    lblGeo: null,
+    lblTime: null,
+    btnShutter: null,
+    btnSwitch: null,
+    btnFlash: null,
+    iconFlash: null,
+    btnGallery: null,
+    imgThumb: null,
+    iconGallery: null,
+    btnSettings: null,
     modals: {
-        settings: document.getElementById('modal-settings'),
-        gallery: document.getElementById('modal-gallery'),
-        preview: document.getElementById('modal-preview'),
-        confirm: document.getElementById('modal-confirm')
+        settings: null,
+        gallery: null,
+        preview: null,
+        confirm: null
     },
-    inpProject: document.getElementById('inp-project-name'),
-    inpNote: document.getElementById('inp-project-note'),
-    inpLogo: document.getElementById('inp-logo'),
-    previewLogo: document.getElementById('preview-logo'),
-    txtNoLogo: document.getElementById('txt-no-logo'),
-    galleryGrid: document.getElementById('gallery-grid'),
-    imgPreview: document.getElementById('img-preview')
+    inpProject: null,
+    inpNote: null,
+    inpLogo: null,
+    previewLogo: null,
+    txtNoLogo: null,
+    galleryGrid: null,
+    imgPreview: null
 };
+
+// Function to initialize DOM elements after the page has loaded
+export function initDOM() {
+    DOM.video = document.getElementById('video-feed');
+    DOM.canvas = document.getElementById('canvas-process');
+    DOM.flashOverlay = document.getElementById('shutter-flash');
+    DOM.lblGeo = document.getElementById('lbl-geo');
+    DOM.lblTime = document.getElementById('lbl-time');
+    DOM.btnShutter = document.getElementById('btn-shutter');
+    DOM.btnSwitch = document.getElementById('btn-switch-cam');
+    DOM.btnFlash = document.getElementById('btn-flash');
+    DOM.iconFlash = document.getElementById('icon-flash');
+    DOM.btnGallery = document.getElementById('btn-gallery');
+    DOM.imgThumb = document.getElementById('img-thumb');
+    DOM.iconGallery = document.getElementById('icon-gallery');
+    DOM.btnSettings = document.getElementById('btn-settings');
+    DOM.modals.settings = document.getElementById('modal-settings');
+    DOM.modals.gallery = document.getElementById('modal-gallery');
+    DOM.modals.preview = document.getElementById('modal-preview');
+    DOM.modals.confirm = document.getElementById('modal-confirm');
+    DOM.inpProject = document.getElementById('inp-project-name');
+    DOM.inpNote = document.getElementById('inp-project-note');
+    DOM.inpLogo = document.getElementById('inp-logo');
+    DOM.previewLogo = document.getElementById('preview-logo');
+    DOM.txtNoLogo = document.getElementById('txt-no-logo');
+    DOM.galleryGrid = document.getElementById('gallery-grid');
+    DOM.imgPreview = document.getElementById('img-preview');
+}

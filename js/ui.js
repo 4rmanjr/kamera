@@ -14,16 +14,16 @@ export class UIController {
         this.locationService = locationService;
         this.utils = utils;
         this.eventBus = eventBus;
-        
+
         // Subscribe ke event canvas capture
         this.eventBus.subscribe('canvas:captureComplete', (dataUrl) => {
             this.storageService.savePhoto(dataUrl, () => {
-                if (!this.dom.modals.gallery.classList.contains('hidden')) {
+                if (this.dom.modals && !this.dom.modals.gallery.classList.contains('hidden')) {
                     this.galleryController.load();
                 }
             });
         });
-        
+
         // Subscribe ke event gallery load requested
         this.eventBus.subscribe('gallery:loadRequested', (callback) => {
             this.storageService.getAll(callback);
@@ -31,56 +31,102 @@ export class UIController {
     }
 
     initListeners() {
-        this.dom.btnShutter.onclick = () => this.cameraService.shutter();
-        this.dom.btnSwitch.onclick = () => this.cameraService.switch();
-        this.dom.btnFlash.onclick = () => this.cameraService.toggleFlash();
-        this.dom.btnGallery.onclick = () => this.galleryController.open();
-        this.dom.btnSettings.onclick = () => this.dom.modals.settings.classList.remove('hidden');
-        document.getElementById('btn-close-settings').onclick = () => this.dom.modals.settings.classList.add('hidden');
-        document.getElementById('btn-close-gallery').onclick = () => this.galleryController.close();
-        document.getElementById('btn-delete-all').onclick = () => this.confirm("Hapus SEMUA foto?", () => {
-            this.storageService.clearAll(() => this.galleryController.load());
-        });
-        document.getElementById('btn-close-preview').onclick = () => this.previewController.close();
-        document.getElementById('btn-download').onclick = () => this.previewController.download();
-        document.getElementById('btn-delete-one').onclick = () => this.confirm("Hapus foto ini?", () => {
-            this.storageService.delete(this.state.currentPhotoId, () => {
-                this.previewController.close();
-                this.galleryController.load();
-                this.storageService.loadLastThumb();
-            });
-        });
-        document.getElementById('btn-confirm-no').onclick = () => this.dom.modals.confirm.classList.add('hidden');
-        document.getElementById('btn-confirm-yes').onclick = () => { 
-            if(this.state.confirmCallback) this.state.confirmCallback(); 
-            this.dom.modals.confirm.classList.add('hidden'); 
+        if (this.dom.btnShutter) this.dom.btnShutter.onclick = () => this.cameraService.shutter();
+        if (this.dom.btnSwitch) this.dom.btnSwitch.onclick = () => this.cameraService.switch();
+        if (this.dom.btnFlash) this.dom.btnFlash.onclick = () => this.cameraService.toggleFlash();
+        if (this.dom.btnGallery) this.dom.btnGallery.onclick = () => this.galleryController.open();
+        if (this.dom.btnSettings) this.dom.btnSettings.onclick = () => {
+            if (this.dom.modals) this.dom.modals.settings.classList.remove('hidden');
         };
-        this.dom.inpProject.oninput = (e) => {
+        
+        const btnCloseSettings = document.getElementById('btn-close-settings');
+        if (btnCloseSettings) btnCloseSettings.onclick = () => {
+            if (this.dom.modals) this.dom.modals.settings.classList.add('hidden');
+        };
+        
+        const btnCloseGallery = document.getElementById('btn-close-gallery');
+        if (btnCloseGallery) btnCloseGallery.onclick = () => {
+            if (this.galleryController) this.galleryController.close();
+        };
+        
+        const btnDeleteAll = document.getElementById('btn-delete-all');
+        if (btnDeleteAll) btnDeleteAll.onclick = () => {
+            if (this.confirm && this.storageService && this.galleryController) {
+                this.confirm("Hapus SEMUA foto?", () => {
+                    this.storageService.clearAll(() => {
+                        if (this.galleryController) this.galleryController.load();
+                    });
+                });
+            }
+        };
+        
+        const btnClosePreview = document.getElementById('btn-close-preview');
+        if (btnClosePreview) btnClosePreview.onclick = () => {
+            if (this.previewController) this.previewController.close();
+        };
+        
+        const btnDownload = document.getElementById('btn-download');
+        if (btnDownload) btnDownload.onclick = () => {
+            if (this.previewController) this.previewController.download();
+        };
+        
+        const btnDeleteOne = document.getElementById('btn-delete-one');
+        if (btnDeleteOne) btnDeleteOne.onclick = () => {
+            if (this.confirm && this.storageService && this.previewController && this.galleryController) {
+                this.confirm("Hapus foto ini?", () => {
+                    this.storageService.delete(this.state.currentPhotoId, () => {
+                        if (this.previewController) this.previewController.close();
+                        if (this.galleryController) this.galleryController.load();
+                        if (this.storageService) this.storageService.loadLastThumb();
+                    });
+                });
+            }
+        };
+        
+        const btnConfirmNo = document.getElementById('btn-confirm-no');
+        if (btnConfirmNo) btnConfirmNo.onclick = () => {
+            if (this.dom.modals) this.dom.modals.confirm.classList.add('hidden');
+        };
+        
+        const btnConfirmYes = document.getElementById('btn-confirm-yes');
+        if (btnConfirmYes) btnConfirmYes.onclick = () => {
+            if(this.state.confirmCallback) this.state.confirmCallback();
+            if (this.dom.modals) this.dom.modals.confirm.classList.add('hidden');
+        };
+        
+        if (this.dom.inpProject) this.dom.inpProject.oninput = (e) => {
             this.utils.updateSetting(this.state.settings, 'projName', e.target.value);
         };
-        this.dom.inpNote.oninput = (e) => {
+        if (this.dom.inpNote) this.dom.inpNote.oninput = (e) => {
             this.utils.updateSetting(this.state.settings, 'projNote', e.target.value);
         };
-        this.dom.inpLogo.onchange = (e) => {
+        if (this.dom.inpLogo) this.dom.inpLogo.onchange = (e) => {
             if (e.target.files[0]) {
                 const r = new FileReader();
-                r.onload = (ev) => { 
-                    localStorage.setItem('gc_logoImg', ev.target.result); 
-                    this.loadLogo(ev.target.result); 
+                r.onload = (ev) => {
+                    localStorage.setItem('gc_logoImg', ev.target.result);
+                    this.loadLogo(ev.target.result);
                 };
                 r.readAsDataURL(e.target.files[0]);
             }
         };
-        document.getElementById('btn-clear-logo').onclick = () => this.confirm("Hapus logo?", () => { 
-            localStorage.removeItem('gc_logoImg'); 
-            this.loadLogo(null); 
-            this.dom.inpLogo.value = ''; 
+        
+        const btnClearLogo = document.getElementById('btn-clear-logo');
+        if (btnClearLogo) btnClearLogo.onclick = () => this.confirm("Hapus logo?", () => {
+            localStorage.removeItem('gc_logoImg');
+            this.loadLogo(null);
+            if (this.dom.inpLogo) this.dom.inpLogo.value = '';
         });
-        document.querySelectorAll('.btn-size').forEach(btn => btn.onclick = () => { 
-            this.utils.updateSetting(this.state.settings, 'textSize', btn.dataset.size); 
-            this.updateSettingsUI(); 
+        
+        // Use classList for all buttons with the same class
+        const btnSizeElements = document.querySelectorAll('.btn-size');
+        btnSizeElements.forEach(btn => btn.onclick = () => {
+            this.utils.updateSetting(this.state.settings, 'textSize', btn.dataset.size);
+            this.updateSettingsUI();
         });
-        document.querySelectorAll('.btn-pos').forEach(btn => btn.onclick = () => { 
+        
+        const btnPosElements = document.querySelectorAll('.btn-pos');
+        btnPosElements.forEach(btn => btn.onclick = () => {
             if (btn.dataset.type === 'text') {
                 this.utils.updateSetting(this.state.settings, 'textPos', btn.dataset.pos);
             } else if (btn.dataset.type === 'logo') {
@@ -88,9 +134,9 @@ export class UIController {
             } else if (btn.dataset.type === 'qr') {
                 this.utils.updateSetting(this.state.settings, 'qrCodePos', btn.dataset.pos);
             }
-            this.updateSettingsUI(); 
+            this.updateSettingsUI();
         });
-        
+
         // Event listener untuk toggle QR code
         const qrToggle = document.getElementById('toggle-qr-code');
         if (qrToggle) {
@@ -101,31 +147,47 @@ export class UIController {
     }
 
     confirm(msg, cb) {
-        document.getElementById('lbl-confirm-msg').innerText = msg;
+        const lblConfirmMsg = document.getElementById('lbl-confirm-msg');
+        if (lblConfirmMsg) {
+            lblConfirmMsg.innerText = msg;
+        }
         this.state.confirmCallback = cb;
-        this.dom.modals.confirm.classList.remove('hidden');
+        if (this.dom.modals) this.dom.modals.confirm.classList.remove('hidden');
     }
 
     loadLogo(src) {
         if (!src) {
             this.state.customLogoImg = null;
-            this.dom.previewLogo.classList.add('hidden');
-            this.dom.txtNoLogo.classList.remove('hidden');
+            if (this.dom.previewLogo) {
+                this.dom.previewLogo.classList.add('hidden');
+            }
+            if (this.dom.txtNoLogo) {
+                this.dom.txtNoLogo.classList.remove('hidden');
+            }
         } else {
             const img = new Image();
             img.src = src;
             img.onload = () => {
                 this.state.customLogoImg = img;
-                this.dom.previewLogo.src = src;
-                this.dom.previewLogo.classList.remove('hidden');
-                this.dom.txtNoLogo.classList.add('hidden');
+                if (this.dom.previewLogo) {
+                    this.dom.previewLogo.src = src;
+                    this.dom.previewLogo.classList.remove('hidden');
+                    this.dom.txtNoLogo.classList.add('hidden');
+                }
             };
         }
     }
 
     updateSettingsUI() {
-        document.querySelectorAll('.btn-size').forEach(b => b.classList.toggle('btn-active', b.dataset.size === this.state.settings.textSize));
-        document.querySelectorAll('.btn-pos').forEach(b => {
+        const btnSizeElements = document.querySelectorAll('.btn-size');
+        btnSizeElements.forEach(b => {
+            if (b.classList) {
+                b.classList.toggle('btn-active', b.dataset.size === this.state.settings.textSize);
+            }
+        });
+        
+        const btnPosElements = document.querySelectorAll('.btn-pos');
+        btnPosElements.forEach(b => {
             let target = this.state.settings.textPos;
             if (b.dataset.type === 'text') {
                 target = this.state.settings.textPos;
@@ -134,9 +196,11 @@ export class UIController {
             } else if (b.dataset.type === 'qr') {
                 target = this.state.settings.qrCodePos;
             }
-            b.classList.toggle('btn-active', b.dataset.pos === target);
+            if (b.classList) {
+                b.classList.toggle('btn-active', b.dataset.pos === target);
+            }
         });
-        
+
         // Update status toggle QR code
         const qrToggle = document.getElementById('toggle-qr-code');
         if (qrToggle) {
@@ -145,8 +209,8 @@ export class UIController {
     }
 
     loadSettings() {
-        this.dom.inpProject.value = this.state.settings.projName;
-        this.dom.inpNote.value = this.state.settings.projNote;
+        if (this.dom.inpProject) this.dom.inpProject.value = this.state.settings.projName;
+        if (this.dom.inpNote) this.dom.inpNote.value = this.state.settings.projNote;
         const savedLogo = localStorage.getItem('gc_logoImg');
         if (savedLogo) this.loadLogo(savedLogo);
         this.updateSettingsUI(); // Memastikan toggle QR code juga diinisialisasi
@@ -155,7 +219,9 @@ export class UIController {
     startClock() {
         setInterval(() => {
             const now = new Date();
-            this.dom.lblTime.innerText = now.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) + ' • ' + now.toLocaleTimeString('id-ID', { hour: '2-digit', minute:'2-digit' });
+            if (this.dom.lblTime) {
+                this.dom.lblTime.innerText = now.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) + ' • ' + now.toLocaleTimeString('id-ID', { hour: '2-digit', minute:'2-digit' });
+            }
         }, 1000);
     }
 
@@ -182,7 +248,10 @@ export class UIController {
         const manifestUrl = 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(manifest));
 
         // 3. Inject ke <head>
-        document.querySelector('link[rel="manifest"]').href = manifestUrl;
-        document.querySelector('link[rel="apple-touch-icon"]').href = iconUrl;
+        const manifestLink = document.querySelector('link[rel="manifest"]');
+        const appleIconLink = document.querySelector('link[rel="apple-touch-icon"]');
+        
+        if (manifestLink) manifestLink.href = manifestUrl;
+        if (appleIconLink) appleIconLink.href = iconUrl;
     }
 }

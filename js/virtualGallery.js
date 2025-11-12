@@ -206,7 +206,11 @@ export class VirtualGallery {
         if (this.imageObserver) {
             this.imageObserver.disconnect();
         }
-        this.viewport.removeEventListener('scroll', this.handleScroll);
-        this.container.innerHTML = '';
+        if (this.viewport) {
+            this.viewport.removeEventListener('scroll', this.handleScroll);
+        }
+        if (this.container) {
+            this.container.innerHTML = '';
+        }
     }
 }

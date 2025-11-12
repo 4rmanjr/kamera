@@ -4,7 +4,7 @@
  */
 
 import { EventBus, eventBus } from './eventBus.js';
-import { DOM } from './dom.js';
+import { DOM, initDOM } from './dom.js';
 import { State } from './state.js';
 import { StorageService } from './storage.js';
 import { CameraService } from './camera.js';

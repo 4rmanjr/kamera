@@ -35,7 +35,9 @@ export class LocationService {
             this.initialAcquisitionStartTime = Date.now();
 
             // Tampilkan status awal
-            this.dom.lblGeo.innerHTML = `<i class="ph ph-spinner animate-spin mr-1" aria-hidden="true"></i> Mengoptimalkan GPS...`;
+            if (this.dom.lblGeo) {
+                this.dom.lblGeo.innerHTML = `<i class="ph ph-spinner animate-spin mr-1" aria-hidden="true"></i> Mengoptimalkan GPS...`;
+            }
 
             this.state.watchId = navigator.geolocation.watchPosition(
                 (p) => {
@@ -52,7 +54,9 @@ export class LocationService {
                 }
             );
         } else {
-            this.dom.lblGeo.innerText = "GPS Tidak Didukung";
+            if (this.dom.lblGeo) {
+                this.dom.lblGeo.innerText = "GPS Tidak Didukung";
+            }
         }
     }
 
@@ -87,11 +91,13 @@ export class LocationService {
                 break;
         }
 
-        this.dom.lblGeo.innerHTML = `<i class="ph ph-warning text-red-400" aria-hidden="true"></i> ${errorMessage} (Tap untuk Ulang)`;
-        this.dom.lblGeo.onclick = () => {
-            this.dom.lblGeo.innerHTML = `<i class="ph ph-spinner animate-spin mr-1" aria-hidden="true"></i> Mencari GPS...`;
-            this.init();
-        };
+        if (this.dom.lblGeo) {
+            this.dom.lblGeo.innerHTML = `<i class="ph ph-warning text-red-400" aria-hidden="true"></i> ${errorMessage} (Tap untuk Ulang)`;
+            this.dom.lblGeo.onclick = () => {
+                this.dom.lblGeo.innerHTML = `<i class="ph ph-spinner animate-spin mr-1" aria-hidden="true"></i> Mencari GPS...`;
+                this.init();
+            };
+        }
     }
 
     processLocationUpdate(position) {
@@ -143,7 +149,7 @@ export class LocationService {
             if (this.updateDebounceTimer) {
                 clearTimeout(this.updateDebounceTimer);
             }
-            
+
             // Bind context sehingga 'this' tetap merujuk ke instance class di dalam fungsi setTimeout
             this.updateDebounceTimer = setTimeout(() => {
                 this.updateLocationDisplay(this.bestLocation);
@@ -190,24 +196,24 @@ export class LocationService {
         // Dalam mode akuisisi cepat, lebih responsif terhadap perbaikan akurasi
         const accuracyImprovement = currentBest.acc - newLocation.acc;
         const accuracyRatio = currentBest.acc / (newLocation.acc || 1);
-        
+
         if (this.fastAcquisitionActive) {
             // Dalam mode cepat, lebih mudah menerima perbaikan
             return accuracyImprovement > 5 || accuracyRatio > 1.2;
         }
-        
+
         // Lokasi baru lebih baik jika:
         // 1. Akurasinya jauh lebih baik (lebih kecil)
         // 2. Akurasinya lebih baik dan tidak jauh lebih lama
         if (accuracyImprovement > 20 || accuracyRatio > 1.5) {
             return true;
         }
-        
+
         // Jika akurasinya serupa, pilih yang punya akurasi lebih baik
         if (Math.abs(accuracyImprovement) < 10) {
             return newLocation.acc < currentBest.acc;
         }
-        
+
         return false;
     }
 
@@ -279,7 +285,9 @@ export class LocationService {
             }
 
             // Tampilkan bahwa lokasi telah stabil
-            this.dom.lblGeo.innerHTML = `<i class="ph ph-map-pin text-green-400" aria-hidden="true"></i> ${refinedLocation.lat.toFixed(6)}, ${refinedLocation.lng.toFixed(6)} (±${refinedLocation.acc}m)`;
+            if (this.dom.lblGeo) {
+                this.dom.lblGeo.innerHTML = `<i class="ph ph-map-pin text-green-400" aria-hidden="true"></i> ${refinedLocation.lat.toFixed(6)}, ${refinedLocation.lng.toFixed(6)} (±${refinedLocation.acc}m)`;
+            }
 
             // Simpan lokasi stabil ke state
             this.state.location = {
@@ -348,7 +356,9 @@ export class LocationService {
     updateLocationDisplay(location) {
         // Validasi bahwa location valid
         if (!location) {
-            this.dom.lblGeo.innerHTML = `<i class="ph ph-warning text-red-400" aria-hidden="true"></i> Lokasi tidak tersedia`;
+            if (this.dom.lblGeo) {
+                this.dom.lblGeo.innerHTML = `<i class="ph ph-warning text-red-400" aria-hidden="true"></i> Lokasi tidak tersedia`;
+            }
             return;
         }
 
@@ -362,6 +372,33 @@ export class LocationService {
         const lng = typeof location.lng === 'number' ? location.lng.toFixed(6) : '0.000000';
         const acc = typeof location.acc === 'number' ? location.acc : 0;
 
-        this.dom.lblGeo.innerHTML = `${stabilityIndicator} ${lat}, ${lng} (±${acc}m)`;
+        if (this.dom.lblGeo) {
+            this.dom.lblGeo.innerHTML = `${stabilityIndicator} ${lat}, ${lng} (±${acc}m)`;
+        }
+    }
+    
+    /**
+     * Cleanup location service resources
+     */
+    destroy() {
+        // Clear geolocation watcher
+        if (this.state.watchId) {
+            navigator.geolocation.clearWatch(this.state.watchId);
+            this.state.watchId = null;
+        }
+        
+        // Clear any existing timers
+        if (this.locationTimer) {
+            clearTimeout(this.locationTimer);
+            this.locationTimer = null;
+        }
+        
+        if (this.updateDebounceTimer) {
+            clearTimeout(this.updateDebounceTimer);
+            this.updateDebounceTimer = null;
+        }
+        
+        // Reset internal state
+        this.resetLocationStatus();
     }
 }
