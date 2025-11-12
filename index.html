@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="id">
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+        />
+        <title>Geo Camera Pro</title>
+
+        <!--
+      (BARU v6.4) PWA Meta Tags & Manifest
+      Service Worker (untuk offline) sengaja DITINGGALKAN
+      untuk menghindari error 'Invalid Scope' di lingkungan blob:
+    -->
+        <meta
+            name="description"
+            content="Aplikasi Kamera Geo dengan Watermark GPS dan Logo Kustom"
+        />
+        <meta name="theme-color" content="#000000" />
+        <link rel="manifest" href="" />
+        <!-- Akan diisi oleh JS -->
+
+        <!-- iOS PWA Tags -->
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta
+            name="apple-mobile-web-app-status-bar-style"
+            content="black-translucent"
+        />
+        <meta name="apple-mobile-web-app-title" content="Geo Cam" />
+        <link rel="apple-touch-icon" href="" />
+        <!-- Akan diisi oleh JS -->
+
+        <!-- Libraries -->
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://unpkg.com/@phosphor-icons/web"></script>
+        <!-- QR Code Library - menggunakan backup yang diperbaiki -->
+        <script src="js/qrcode.min.js.backup"></script>
+
+        <style>
+            /* --- CORE STYLES --- */
+            body {
+                background-color: #000;
+                color: white;
+                font-family:
+                    "Inter",
+                    system-ui,
+                    -apple-system,
+                    sans-serif;
+                overflow: hidden;
+                touch-action: manipulation;
+                overscroll-behavior: none;
+                -webkit-user-select: none;
+                user-select: none;
+                -webkit-tap-highlight-color: transparent;
+            }
+
+            /* Animasi Flash Shutter */
+            @keyframes flash-anim {
+                0% {
+                    opacity: 0;
+                }
+                50% {
+                    opacity: 1;
+                }
+                100% {
+                    opacity: 0;
+                }
+            }
+            .flash-active {
+                animation: flash-anim 0.15s ease-out;
+            }
+
+            /* Animasi Modal */
+            @keyframes fade-in {
+                from {
+                    opacity: 0;
+                }
+                to {
+                    opacity: 1;
+                }
+            }
+            .animate-fade-in {
+                animation: fade-in 0.2s ease-out;
+            }
+
+            /* Utilities */
+            .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+            }
+            .scrollbar-hide {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+            .text-shadow {
+                text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.8);
+            }
+
+            /* Active States untuk Buttons */
+            .btn-active {
+                background-color: #2563eb !important;
+                color: white !important;
+                border-color: #60a5fa !important;
+            }
+            
+            /* Special adjustment for shutter button */
+            #btn-shutter {
+                margin-top: -12px; /* Bring the shutter button up to overlap slightly with the control bar */
+            }
+        </style>
+    </head>
+    <body class="h-screen w-screen flex flex-col relative bg-black">
+        <!-- ================= HEADER TOOLBAR (SEMANTIK: <header>) ================= -->
+        <header
+            class="absolute top-0 left-0 right-0 h-24 p-5 z-30 flex justify-between items-start bg-gradient-to-b from-black/70 to-transparent pointer-events-none pt-5"
+        >
+            <button
+                id="btn-flash"
+                aria-label="Kontrol Lampu Kilat"
+                class="pointer-events-auto w-12 h-12 rounded-full bg-black/30 backdrop-blur-md flex items-center justify-center border border-white/10 active:scale-95 transition hidden shrink-0"
+            >
+                <i
+                    id="icon-flash"
+                    class="ph ph-lightning-slash text-2xl text-white/70"
+                    aria-hidden="true"
+                ></i>
+            </button>
+            <button
+                id="btn-switch-cam"
+                aria-label="Putar Kamera"
+                class="pointer-events-auto w-12 h-12 rounded-full bg-black/30 backdrop-blur-md flex items-center justify-center border border-white/10 active:scale-95 transition shrink-0"
+            >
+                <i
+                    class="ph ph-camera-rotate text-2xl text-white"
+                    aria-hidden="true"
+                ></i>
+            </button>
+        </header>
+
+        <!-- ================= VIEWFINDER (SEMANTIK: <main>) ================= -->
+        <main
+            class="relative flex-1 bg-black overflow-hidden group cursor-crosshair"
+        >
+            <video
+                id="video-feed"
+                autoplay
+                playsinline
+                muted
+                class="w-full h-full object-cover transform scale-x-[-1]"
+            ></video>
+            <canvas id="canvas-process" class="hidden"></canvas>
+            <div
+                id="lbl-geo"
+                class="absolute top-16 left-4 p-3 rounded-lg pointer-events-none text-shadow z-20 text-sm font-mono text-white/90 cursor-pointer transition-colors inline-block bg-black/20 px-3 py-2 backdrop-blur-sm border border-white/5"
+            >
+                <i
+                    class="ph ph-spinner animate-spin mr-1 text-base"
+                    aria-hidden="true"
+                ></i>
+                Mencari GPS...
+            </div>
+            <div
+                id="lbl-time"
+                class="absolute top-4 left-4 p-3 rounded-lg pointer-events-none text-shadow z-20 text-base font-bold text-white tracking-wide bg-black/20 px-3 py-2 backdrop-blur-sm border border-white/5"
+            ></div>
+            <div
+                id="shutter-flash"
+                class="absolute inset-0 bg-white opacity-0 pointer-events-none z-50"
+            ></div>
+        </main>
+
+        <!-- ================= BOTTOM CONTROLS (SEMANTIK: <footer>) ================= -->
+        <footer
+            class="h-20 bg-black flex items-center justify-around px-8 pt-3 pb-2 absolute bottom-10 left-0 right-0 z-40 select-none"
+        >
+            <button
+                id="btn-gallery"
+                aria-label="Buka Galeri"
+                class="w-14 h-14 rounded-xl bg-gray-800 border border-gray-700 overflow-hidden relative active:scale-95 transition shadow-lg group shrink-0"
+            >
+                <img
+                    id="img-thumb"
+                    src=""
+                    class="w-full h-full object-cover hidden"
+                    alt="Foto terakhir di galeri"
+                />
+                <i
+                    id="icon-gallery"
+                    class="ph ph-images text-2xl text-gray-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 group-hover:text-gray-200"
+                    aria-hidden="true"
+                ></i>
+            </button>
+            <button
+                id="btn-shutter"
+                aria-label="Ambil Foto"
+                class="w-20 h-20 rounded-full border-4 border-white/80 flex items-center justify-center active:scale-95 transition duration-150 shadow-xl bg-transparent shrink-0 relative z-10"
+            >
+                <div class="w-16 h-16 bg-white rounded-full shadow-inner"></div>
+            </button>
+            <button
+                id="btn-settings"
+                aria-label="Buka Pengaturan"
+                class="w-14 h-14 flex items-center justify-center rounded-full bg-gray-800 text-white active:bg-gray-700 transition border border-gray-700 shadow-lg shrink-0"
+            >
+                <i
+                    class="ph ph-sliders-horizontal text-2xl text-gray-300"
+                    aria-hidden="true"
+                ></i>
+            </button>
+        </footer>
+
+        <!-- ================= MODALS (SEMANTIK: <aside role="dialog">) ================= -->
+
+        <!-- 1. SETTINGS MODAL -->
+        <aside
+            id="modal-settings"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-title"
+            class="hidden fixed inset-0 bg-black/95 z-50 flex flex-col animate-fade-in overflow-y-auto scrollbar-hide"
+        >
+            <div
+                class="flex justify-between items-center p-5 border-b border-gray-800 sticky top-0 bg-black/95 backdrop-blur-md z-10 pt-5"
+            >
+                <h2 id="settings-title" class="text-xl font-bold text-white">
+                    Pengaturan
+                </h2>
+                <button
+                    id="btn-close-settings"
+                    aria-label="Tutup Pengaturan"
+                    class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition"
+                >
+                    <i class="ph ph-x text-lg" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-8 pb-24">
+                <!-- Info Proyek -->
+                <div class="space-y-4">
+                    <h3
+                        class="text-xs uppercase tracking-wider font-semibold text-blue-400 pb-1 border-b border-gray-800"
+                    >
+                        Info Proyek
+                    </h3>
+                    <div>
+                        <label
+                            for="inp-project-name"
+                            class="block text-sm text-gray-400 mb-2"
+                            >Judul Proyek (Kuning)</label
+                        >
+                        <input
+                            type="text"
+                            id="inp-project-name"
+                            class="w-full bg-gray-900 text-white p-3 rounded-xl border border-gray-700 focus:border-blue-500 focus:outline-none transition"
+                            placeholder="Cth: Proyek Tol Seksi 4"
+                        />
+                    </div>
+                    <div>
+                        <label
+                            for="inp-project-note"
+                            class="block text-sm text-gray-400 mb-2"
+                            >Catatan (Putih)</label
+                        >
+                        <input
+                            type="text"
+                            id="inp-project-note"
+                            class="w-full bg-gray-900 text-white p-3 rounded-xl border border-gray-700 focus:border-blue-500 focus:outline-none transition"
+                            placeholder="Cth: STA 12+500"
+                        />
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2"
+                            >Ukuran Font</label
+                        >
+                        <div class="flex gap-3">
+                            <button
+                                data-size="s"
+                                class="btn-size flex-1 bg-gray-800 border border-gray-700 text-gray-300 py-3 rounded-xl text-sm font-medium transition"
+                            >
+                                Kecil
+                            </button>
+                            <button
+                                data-size="m"
+                                class="btn-size flex-1 bg-gray-800 border border-gray-700 text-gray-300 py-3 rounded-xl text-sm font-medium transition"
+                            >
+                                Sedang
+                            </button>
+                            <button
+                                data-size="l"
+                                class="btn-size flex-1 bg-gray-800 border border-gray-700 text-gray-300 py-3 rounded-xl text-sm font-medium transition"
+                            >
+                                Besar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Logo -->
+                <div class="space-y-4">
+                    <h3
+                        class="text-xs uppercase tracking-wider font-semibold text-blue-400 pb-1 border-b border-gray-800"
+                    >
+                        Logo Perusahaan
+                    </h3>
+                    <div
+                        class="flex items-center gap-4 bg-gray-900/50 p-4 rounded-xl border border-gray-800"
+                    >
+                        <div
+                            class="w-20 h-20 bg-black/40 border border-gray-700 rounded-lg flex items-center justify-center overflow-hidden relative shrink-0"
+                            role="img"
+                            aria-label="Pratinjau Logo"
+                        >
+                            <div
+                                class="absolute inset-0 opacity-20"
+                                style="
+                                    background-image: radial-gradient(
+                                        #4b5563 1px,
+                                        transparent 1px
+                                    );
+                                    background-size: 8px 8px;
+                                "
+                                aria-hidden="true"
+                            ></div>
+                            <img
+                                id="preview-logo"
+                                class="w-full h-full object-contain relative z-10 hidden"
+                                alt="Pratinjau logo kustom"
+                            />
+                            <span
+                                id="txt-no-logo"
+                                class="text-xs text-gray-500 relative z-10"
+                                >Kosong</span
+                            >
+                        </div>
+                        <div class="flex flex-col gap-2 w-full">
+                            <input
+                                type="file"
+                                id="inp-logo"
+                                accept="image/*"
+                                class="hidden"
+                            />
+                            <button
+                                onclick="document.getElementById('inp-logo').click()"
+                                class="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg font-medium transition shadow-lg shadow-blue-900/20 flex items-center justify-center"
+                            >
+                                <i
+                                    class="ph ph-upload-simple mr-2"
+                                    aria-hidden="true"
+                                ></i>
+                                Upload
+                            </button>
+                            <button
+                                id="btn-clear-logo"
+                                aria-label="Hapus Logo Kustom"
+                                class="text-red-400 hover:text-red-300 text-xs py-1 px-2 rounded hover:bg-red-900/20 transition self-start"
+                            >
+                                Hapus Logo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Layout -->
+                <div class="space-y-4">
+                    <h3
+                        class="text-xs uppercase tracking-wider font-semibold text-blue-400 pb-1 border-b border-gray-800"
+                    >
+                        Tata Letak
+                    </h3>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2"
+                            >Posisi Teks</label
+                        >
+                        <div class="grid grid-cols-4 gap-2">
+                            <button
+                                data-pos="tl"
+                                data-type="text"
+                                aria-label="Posisi Teks: Kiri Atas"
+                                class="btn-pos bg-gray-800 border border-gray-700 text-gray-400 p-2 rounded-lg flex justify-center"
+                            >
+                                <i
+                                    class="ph ph-arrow-square-up-left text-xl"
+                                    aria-hidden="true"
+                                ></i>
+                            </button>
+                            <button
+                                data-pos="tr"
+                                data-type="text"
+                                aria-label="Posisi Teks: Kanan Atas"
+                                class="btn-pos bg-gray-800 border border-gray-700 text-gray-400 p-2 rounded-lg flex justify-center"
+                            >
+                                <i
+                                    class="ph ph-arrow-square-up-right text-xl"
+                                    aria-hidden="true"
+                                ></i>
+                            </button>
+                            <button
+                                data-pos="bl"
+                                data-type="text"
+                                aria-label="Posisi Teks: Kiri Bawah"
+                                class="btn-pos bg-gray-800 border border-gray-700 text-gray-400 p-2 rounded-lg flex justify-center"
+                            >
+                                <i
+                                    class="ph ph-arrow-square-down-left text-xl"
+                                    aria-hidden="true"
+                                ></i>
+                            </button>
+                            <button
+                                data-pos="br"
+                                data-type="text"
+                                aria-label="Posisi Teks: Kanan Bawah"
+                                class="btn-pos bg-gray-800 border border-gray-700 text-gray-400 p-2 rounded-lg flex justify-center"
+                            >
+                                <i
+                                    class="ph ph-arrow-square-down-right text-xl"
+                                    aria-hidden="true"
+                                ></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2"
+                            >Posisi Logo</label
+                        >
+                        <div class="grid grid-cols-4 gap-2">
+                            <button
+                                data-pos="tl"
+                                data-type="logo"
+                                aria-label="Posisi Logo: Kiri Atas"
+                                class="btn-pos bg-gray-800 border border-gray-700 text-gray-400 p-2 rounded-lg flex justify-center"
+                            >
+                                <i
+                                    class="ph ph-arrow-square-up-left text-xl"
+                                    aria-hidden="true"
+                                ></i>
+                            </button>
+                            <button
+                                data-pos="tr"
+                                data-type="logo"
+                                aria-label="Posisi Logo: Kanan Atas"
+                                class="btn-pos bg-gray-800 border border-gray-700 text-gray-400 p-2 rounded-lg flex justify-center"
+                            >
+                                <i
+                                    class="ph ph-arrow-square-up-right text-xl"
+                                    aria-hidden="true"
+                                ></i>
+                            </button>
+                            <button
+                                data-pos="bl"
+                                data-type="logo"
+                                aria-label="Posisi Logo: Kiri Bawah"
+                                class="btn-pos bg-gray-800 border border-gray-700 text-gray-400 p-2 rounded-lg flex justify-center"
+                            >
+                                <i
+                                    class="ph ph-arrow-square-down-left text-xl"
+                                    aria-hidden="true"
+                                ></i>
+                            </button>
+                            <button
+                                data-pos="br"
+                                data-type="logo"
+                                aria-label="Posisi Logo: Kanan Bawah"
+                                class="btn-pos bg-gray-800 border border-gray-700 text-gray-400 p-2 rounded-lg flex justify-center"
+                            >
+                                <i
+                                    class="ph ph-arrow-square-down-right text-xl"
+                                    aria-hidden="true"
+                                ></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2"
+                            >Posisi QR Code</label
+                        >
+                        <div class="grid grid-cols-4 gap-2">
+                            <button
+                                data-pos="tl"
+                                data-type="qr"
+                                aria-label="Posisi QR Code: Kiri Atas"
+                                class="btn-pos bg-gray-800 border border-gray-700 text-gray-400 p-2 rounded-lg flex justify-center"
+                            >
+                                <i
+                                    class="ph ph-arrow-square-up-left text-xl"
+                                    aria-hidden="true"
+                                ></i>
+                            </button>
+                            <button
+                                data-pos="tr"
+                                data-type="qr"
+                                aria-label="Posisi QR Code: Kanan Atas"
+                                class="btn-pos bg-gray-800 border border-gray-700 text-gray-400 p-2 rounded-lg flex justify-center"
+                            >
+                                <i
+                                    class="ph ph-arrow-square-up-right text-xl"
+                                    aria-hidden="true"
+                                ></i>
+                            </button>
+                            <button
+                                data-pos="bl"
+                                data-type="qr"
+                                aria-label="Posisi QR Code: Kiri Bawah"
+                                class="btn-pos bg-gray-800 border border-gray-700 text-gray-400 p-2 rounded-lg flex justify-center"
+                            >
+                                <i
+                                    class="ph ph-arrow-square-down-left text-xl"
+                                    aria-hidden="true"
+                                ></i>
+                            </button>
+                            <button
+                                data-pos="br"
+                                data-type="qr"
+                                aria-label="Posisi QR Code: Kanan Bawah"
+                                class="btn-pos bg-gray-800 border border-gray-700 text-gray-400 p-2 rounded-lg flex justify-center"
+                            >
+                                <i
+                                    class="ph ph-arrow-square-down-right text-xl"
+                                    aria-hidden="true"
+                                ></i>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Toggle QR Code -->
+                    <div>
+                        <label class="flex items-center space-x-3">
+                            <input
+                                type="checkbox"
+                                id="toggle-qr-code"
+                                class="form-checkbox h-5 w-5 text-blue-600 rounded"
+                            />
+                            <span class="text-sm text-gray-400"
+                                >Aktifkan QR Code Watermark</span
+                            >
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 2. GALLERY MODAL -->
+        <aside
+            id="modal-gallery"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gallery-title"
+            class="hidden fixed inset-0 bg-black z-50 flex flex-col transition-transform duration-300 transform translate-y-full"
+        >
+            <div
+                class="flex justify-between items-center p-4 bg-gray-900 border-b border-gray-800 z-10 pt-5"
+            >
+                <button
+                    id="btn-close-gallery"
+                    class="text-blue-400 text-lg font-medium flex items-center active:text-blue-300"
+                >
+                    <i class="ph ph-caret-left mr-1" aria-hidden="true"></i
+                    >Kembali
+                </button>
+                <h2 id="gallery-title" class="text-lg font-bold text-white">
+                    Galeri
+                    <span
+                        id="lbl-gallery-count"
+                        class="text-sm text-gray-400 font-normal ml-1"
+                    ></span>
+                </h2>
+                <button
+                    id="btn-delete-all"
+                    aria-label="Hapus Semua Foto"
+                    class="w-10 h-10 flex items-center justify-center rounded-full text-red-500 hover:bg-red-900/20 transition"
+                >
+                    <i class="ph ph-trash text-xl" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div
+                id="gallery-grid"
+                class="flex-1 overflow-y-auto p-1 grid grid-cols-3 gap-1 content-start scrollbar-hide bg-gray-950"
+            >
+                <!-- Gambar akan di-load oleh IntersectionObserver -->
+            </div>
+        </aside>
+
+        <!-- 3. PHOTO PREVIEW MODAL -->
+        <aside
+            id="modal-preview"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Pratinjau Foto"
+            class="hidden fixed inset-0 bg-black z-[60] flex items-center justify-center backdrop-blur-xl bg-black/90"
+        >
+            <img
+                id="img-preview"
+                src=""
+                class="max-w-full max-h-full object-contain shadow-2xl"
+                alt="Pratinjau foto yang diperbesar"
+            />
+            <div
+                class="absolute top-0 left-0 right-0 p-4 flex justify-between items-start bg-gradient-to-b from-black/80 to-transparent h-24 z-20 pt-5"
+            >
+                <button
+                    id="btn-close-preview"
+                    aria-label="Tutup Pratinjau"
+                    class="w-10 h-10 flex items-center justify-center bg-white/10 backdrop-blur-md rounded-full text-white hover:bg-white/20 transition"
+                >
+                    <i class="ph ph-x text-xl" aria-hidden="true"></i>
+                </button>
+                <div class="flex gap-3">
+                    <button
+                        id="btn-download"
+                        aria-label="Unduh Foto"
+                        class="w-10 h-10 flex items-center justify-center bg-blue-600/80 backdrop-blur-md rounded-full text-white hover:bg-blue-600 transition"
+                    >
+                        <i
+                            class="ph ph-download-simple text-xl"
+                            aria-hidden="true"
+                        ></i>
+                    </button>
+                    <button
+                        id="btn-delete-one"
+                        aria-label="Hapus Foto Ini"
+                        class="w-10 h-10 flex items-center justify-center bg-red-600/80 backdrop-blur-md rounded-full text-white hover:bg-red-600 transition"
+                    >
+                        <i class="ph ph-trash text-xl" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 4. CONFIRMATION DIALOG -->
+        <aside
+            id="modal-confirm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-title"
+            class="hidden fixed inset-0 bg-black/80 z-[70] flex items-center justify-center p-6 animate-fade-in backdrop-blur-sm"
+        >
+            <div
+                class="bg-gray-800 border border-gray-700 rounded-2xl p-6 max-w-xs w-full shadow-2xl transform scale-100 transition-all"
+            >
+                <div
+                    class="w-12 h-12 rounded-full bg-red-900/30 flex items-center justify-center mb-4 text-red-500"
+                >
+                    <i class="ph ph-warning text-2xl" aria-hidden="true"></i>
+                </div>
+                <h3
+                    id="confirm-title"
+                    class="text-lg font-bold mb-2 text-white"
+                >
+                    Konfirmasi
+                </h3>
+                <p
+                    id="lbl-confirm-msg"
+                    class="text-gray-300 mb-6 text-sm leading-relaxed"
+                >
+                    Yakin?
+                </p>
+                <div class="flex gap-3">
+                    <button
+                        id="btn-confirm-no"
+                        class="flex-1 px-4 py-2.5 bg-gray-700 rounded-xl hover:bg-gray-600 transition text-white font-medium text-sm"
+                    >
+                        Batal
+                    </button>
+                    <button
+                        id="btn-confirm-yes"
+                        class="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-500 transition font-medium text-sm"
+                    >
+                        Ya, Hapus
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- ================= LOGIC APP ================= -->
+        <script type="module" src="js/main.js"></script>
+    </body>
+</html>
