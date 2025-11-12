@@ -114,27 +114,30 @@
         <header
             class="absolute top-0 left-0 right-0 h-28 p-6 z-30 flex justify-between items-start bg-gradient-to-b from-black/70 to-transparent pointer-events-none pt-6"
         >
-            <button
-                id="btn-flash"
-                aria-label="Kontrol Lampu Kilat"
-                class="pointer-events-auto w-11 h-11 rounded-full bg-black/30 backdrop-blur-md flex items-center justify-center border border-white/10 active:scale-95 transition hidden shrink-0"
-            >
-                <i
-                    id="icon-flash"
-                    class="ph ph-lightning-slash text-xl text-white/70"
-                    aria-hidden="true"
-                ></i>
-            </button>
-            <button
-                id="btn-switch-cam"
-                aria-label="Putar Kamera"
-                class="pointer-events-auto w-11 h-11 rounded-full bg-black/30 backdrop-blur-md flex items-center justify-center border border-white/10 active:scale-95 transition shrink-0"
-            >
-                <i
-                    class="ph ph-camera-rotate text-xl text-white"
-                    aria-hidden="true"
-                ></i>
-            </button>
+            <div class="flex space-x-3">
+                <button
+                    id="btn-flash"
+                    aria-label="Kontrol Lampu Kilat"
+                    class="pointer-events-auto w-11 h-11 rounded-full bg-black/30 backdrop-blur-md flex items-center justify-center border border-white/10 active:scale-95 transition hidden shrink-0"
+                >
+                    <i
+                        id="icon-flash"
+                        class="ph ph-lightning-slash text-xl text-white/70"
+                        aria-hidden="true"
+                    ></i>
+                </button>
+                <button
+                    id="btn-switch-cam"
+                    aria-label="Putar Kamera"
+                    class="pointer-events-auto w-11 h-11 rounded-full bg-black/30 backdrop-blur-md flex items-center justify-center border border-white/10 active:scale-95 transition shrink-0"
+                >
+                    <i
+                        class="ph ph-camera-rotate text-xl text-white"
+                        aria-hidden="true"
+                    ></i>
+                </button>
+            </div>
+            <div></div>  <!-- Spacer di tengah -->
         </header>
 
         <!-- ================= VIEWFINDER (SEMANTIK: <main>) ================= -->
@@ -151,7 +154,7 @@
             <canvas id="canvas-process" class="hidden"></canvas>
             <div
                 id="lbl-geo"
-                class="absolute top-20 left-4 p-3 rounded-lg pointer-events-none text-shadow z-20 text-sm font-mono text-white/90 cursor-pointer transition-colors inline-block bg-black/20 px-3 py-2 backdrop-blur-sm border border-white/5"
+                class="absolute top-20 right-4 p-3 rounded-lg pointer-events-none text-shadow z-20 text-sm font-mono text-white/90 cursor-pointer transition-colors inline-block bg-black/20 px-3 py-2 backdrop-blur-sm border border-white/5"
             >
                 <i
                     class="ph ph-spinner animate-spin mr-1 text-base"
@@ -161,7 +164,7 @@
             </div>
             <div
                 id="lbl-time"
-                class="absolute top-6 left-4 p-3 rounded-lg pointer-events-none text-shadow z-20 text-base font-bold text-white tracking-wide bg-black/20 px-3 py-2 backdrop-blur-sm border border-white/5"
+                class="absolute top-6 right-4 p-3 rounded-lg pointer-events-none text-shadow z-20 text-base font-bold text-white tracking-wide bg-black/20 px-3 py-2 backdrop-blur-sm border border-white/5"
             ></div>
             <div
                 id="shutter-flash"
@@ -208,6 +211,9 @@
                 ></i>
             </button>
         </footer>
+
+        <!-- Fill area below footer to match footer color -->
+        <div class="absolute bottom-0 left-0 right-0 h-10 bg-black z-35 pointer-events-none"></div>
 
         <!-- ================= MODALS (SEMANTIK: <aside role="dialog">) ================= -->
 

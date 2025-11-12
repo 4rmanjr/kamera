@@ -1,6 +1,6 @@
 /**
- * Location Service Module (Enhanced Performance & Accuracy - Bug Fixed)
- * Mengelola fungsionalitas geolokasi dengan akurasi dan performa yang lebih baik
+ * Location Service Module (Enhanced Real-Time Performance & Accuracy)
+ * Mengelola fungsionalitas geolokasi dengan akurasi dan performa real-time yang lebih baik
  */
 
 export class LocationService {
@@ -9,12 +9,13 @@ export class LocationService {
         this.dom = dom;
         this.eventBus = eventBus;
 
-        // Konfigurasi performa
+        // Konfigurasi performa real-time
         this.MIN_ACCURACY = 25; // Akurasi target dalam meter
-        this.BEST_LOCATION_TIMEOUT = 15000; // 15 detik untuk mencari posisi terbaik sebelum stabil
+        this.BEST_LOCATION_TIMEOUT = 12000; // 12 detik untuk mencari posisi terbaik (lebih cepat)
         this.MOVEMENT_THRESHOLD = 10; // Meter - ambang perubahan posisi yang signifikan
-        this.UPDATE_DEBOUNCE = 1000; // Milidetik - mencegah terlalu banyak update UI
-        this.POSITION_HISTORY_SIZE = 10; // Jumlah pembacaan lokasi terakhir untuk perhitungan rata-rata
+        this.UPDATE_DEBOUNCE = 500; // Milidetik - lebih cepat untuk update UI real-time
+        this.POSITION_HISTORY_SIZE = 15; // Lebih banyak riwayat untuk akurasi lebih baik
+        this.FAST_ACQUISITION_TIMEOUT = 3000; // Waktu awal untuk akuisisi cepat
 
         // Status internal
         this.bestLocation = null;
@@ -23,12 +24,15 @@ export class LocationService {
         this.updateDebounceTimer = null;
         this.positionHistory = [];
         this.lastUpdateTime = 0;
+        this.fastAcquisitionActive = true; // Mode akuisisi cepat aktif awalnya
+        this.initialAcquisitionStartTime = 0;
     }
 
     init() {
         if ("geolocation" in navigator) {
             // Reset status lokasi
             this.resetLocationStatus();
+            this.initialAcquisitionStartTime = Date.now();
 
             // Tampilkan status awal
             this.dom.lblGeo.innerHTML = `<i class="ph ph-spinner animate-spin mr-1" aria-hidden="true"></i> Mengoptimalkan GPS...`;
@@ -40,11 +44,11 @@ export class LocationService {
                 (err) => {
                     this.handleLocationError(err);
                 },
-                { 
-                    enableHighAccuracy: true, 
-                    timeout: 60000, // Lebih lama untuk akurasi tinggi
+                {
+                    enableHighAccuracy: true,
+                    timeout: 45000, // Lebih pendek dari sebelumnya untuk respons lebih cepat
                     maximumAge: 0,
-                    distanceFilter: 5 // Hanya menerima update saat berpindah 5 meter
+                    distanceFilter: 3 // Lebih kecil dari sebelumnya untuk deteksi perubahan halus
                 }
             );
         } else {
@@ -56,6 +60,7 @@ export class LocationService {
         this.isLocationStable = false;
         this.bestLocation = null;
         this.positionHistory = [];
+        this.fastAcquisitionActive = true;
 
         if (this.locationTimer) {
             clearTimeout(this.locationTimer);
@@ -148,6 +153,11 @@ export class LocationService {
 
         // Cek apakah lokasi sudah cukup stabil atau akurat
         if (!this.isLocationStable && this.bestLocation) {
+            // Aktifkan mode akuisisi cepat untuk 3 detik pertama
+            if (this.fastAcquisitionActive && (Date.now() - this.initialAcquisitionStartTime) > this.FAST_ACQUISITION_TIMEOUT) {
+                this.fastAcquisitionActive = false;
+            }
+
             // Mulai timer untuk menandai lokasi sebagai stabil setelah waktu tertentu
             if (!this.locationTimer) {
                 this.locationTimer = setTimeout(() => {
@@ -157,8 +167,8 @@ export class LocationService {
 
             // Cek apakah kita sudah mendapatkan lokasi yang cukup akurat
             if (this.bestLocation.acc <= this.MIN_ACCURACY) {
-                // Tambahkan validasi: pastikan beberapa pembacaan terakhir konsisten
-                if (this.isLocationConsistent()) {
+                // Dalam mode akuisisi cepat, pertimbangkan untuk menstabilkan lebih awal
+                if (this.fastAcquisitionActive || this.isLocationConsistent()) {
                     this.makeLocationStable();
                 }
             }
@@ -177,12 +187,18 @@ export class LocationService {
             return false; // Jika salah satu tidak memiliki akurasi, jangan ganti
         }
 
-        // Lokasi baru lebih baik jika:
-        // 1. Akurasinya jauh lebih baik (lebih kecil)
-        // 2. Akurasinya lebih baik dan tidak jauh lebih lama
+        // Dalam mode akuisisi cepat, lebih responsif terhadap perbaikan akurasi
         const accuracyImprovement = currentBest.acc - newLocation.acc;
         const accuracyRatio = currentBest.acc / (newLocation.acc || 1);
         
+        if (this.fastAcquisitionActive) {
+            // Dalam mode cepat, lebih mudah menerima perbaikan
+            return accuracyImprovement > 5 || accuracyRatio > 1.2;
+        }
+        
+        // Lokasi baru lebih baik jika:
+        // 1. Akurasinya jauh lebih baik (lebih kecil)
+        // 2. Akurasinya lebih baik dan tidak jauh lebih lama
         if (accuracyImprovement > 20 || accuracyRatio > 1.5) {
             return true;
         }
@@ -205,7 +221,7 @@ export class LocationService {
         const recentPositions = this.positionHistory.slice(-5);
         const avgLat = recentPositions.reduce((sum, pos) => sum + pos.lat, 0) / recentPositions.length;
         const avgLng = recentPositions.reduce((sum, pos) => sum + pos.lng, 0) / recentPositions.length;
-        
+
         // Hitung seberapa dekat pembacaan terbaru dengan rata-rata
         let consistentCount = 0;
         const distanceThreshold = this.MOVEMENT_THRESHOLD / 111000; // Dalam derajat (111km per derajat)
@@ -231,9 +247,9 @@ export class LocationService {
         const R = 6371; // Radius bumi dalam km
         const dLat = this.toRadians(lat2 - lat1);
         const dLon = this.toRadians(lng2 - lng1);
-        const a = 
+        const a =
             Math.sin(dLat/2) * Math.sin(dLat/2) +
-            Math.cos(this.toRadians(lat1)) * Math.cos(this.toRadians(lat2)) * 
+            Math.cos(this.toRadians(lat1)) * Math.cos(this.toRadians(lat2)) *
             Math.sin(dLon/2) * Math.sin(dLon/2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         return R * c; // Jarak dalam km
@@ -246,25 +262,25 @@ export class LocationService {
     makeLocationStable() {
         if (!this.isLocationStable && this.bestLocation) {
             this.isLocationStable = true;
-            
+
             // Hentikan timer jika masih berjalan
             if (this.locationTimer) {
                 clearTimeout(this.locationTimer);
                 this.locationTimer = null;
             }
-            
+
             // Hitung lokasi rata-rata dari beberapa pembacaan terbaik untuk presisi tambahan
             const refinedLocation = this.calculateRefinedLocation();
-            
+
             // Pastikan refinedLocation valid sebelum digunakan
             if (!refinedLocation) {
                 console.error("refinedLocation tidak valid di makeLocationStable");
                 return;
             }
-            
+
             // Tampilkan bahwa lokasi telah stabil
             this.dom.lblGeo.innerHTML = `<i class="ph ph-map-pin text-green-400" aria-hidden="true"></i> ${refinedLocation.lat.toFixed(6)}, ${refinedLocation.lng.toFixed(6)} (±${refinedLocation.acc}m)`;
-            
+
             // Simpan lokasi stabil ke state
             this.state.location = {
                 lat: refinedLocation.lat.toFixed(6),
@@ -275,7 +291,7 @@ export class LocationService {
                 speed: refinedLocation.speed,
                 heading: refinedLocation.heading
             };
-            
+
             // Emit event bahwa lokasi telah diperbarui
             this.eventBus.emit('location:updated', this.state.location);
         }
@@ -289,7 +305,7 @@ export class LocationService {
         // Ambil beberapa pembacaan terbaik berdasarkan akurasi
         const bestPositions = [...this.positionHistory]
             .sort((a, b) => a.acc - b.acc)  // Urutkan berdasarkan akurasi
-            .slice(0, Math.min(5, this.positionHistory.length));  // Ambil 5 terbaik atau semua jika kurang
+            .slice(0, Math.min(7, this.positionHistory.length));  // Ambil 7 terbaik (lebih dari sebelumnya)
 
         // Hitung rata-rata tertimbang berdasarkan akurasi
         let totalLat = 0, totalLng = 0, totalAcc = 0;
@@ -318,7 +334,7 @@ export class LocationService {
             // Jika weightSum adalah 0, kembalikan bestLocation untuk mencegah NaN
             return this.bestLocation || {
                 lat: 0,
-                lng: 0, 
+                lng: 0,
                 acc: 0,
                 altitude: null,
                 altitudeAccuracy: null,
@@ -335,17 +351,17 @@ export class LocationService {
             this.dom.lblGeo.innerHTML = `<i class="ph ph-warning text-red-400" aria-hidden="true"></i> Lokasi tidak tersedia`;
             return;
         }
-        
+
         // Tampilkan lokasi saat ini dengan indikator apakah sudah stabil atau belum
-        const stabilityIndicator = this.isLocationStable ? 
-            '<i class="ph ph-map-pin text-green-400" aria-hidden="true"></i>' : 
+        const stabilityIndicator = this.isLocationStable ?
+            '<i class="ph ph-map-pin text-green-400" aria-hidden="true"></i>' :
             '<i class="ph ph-map-pin text-blue-400" aria-hidden="true"></i>';
-            
+
         // Pastikan location.lat dan location.lng adalah angka sebelum memformat
         const lat = typeof location.lat === 'number' ? location.lat.toFixed(6) : '0.000000';
         const lng = typeof location.lng === 'number' ? location.lng.toFixed(6) : '0.000000';
         const acc = typeof location.acc === 'number' ? location.acc : 0;
-        
+
         this.dom.lblGeo.innerHTML = `${stabilityIndicator} ${lat}, ${lng} (±${acc}m)`;
     }
 }
