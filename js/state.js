@@ -25,5 +25,6 @@ export const State = {
     currentPhotoId: null,
     currentPhotoSrc: null,
     confirmCallback: null,
-    galleryObserver: null
+    galleryObserver: null,
+    zoomLevel: 1.0
 };

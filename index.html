@@ -103,6 +103,19 @@
                 border-color: #60a5fa !important;
             }
             
+            /* Active States untuk Buttons */
+            .btn-active {
+                background-color: #2563eb !important;
+                color: white !important;
+                border-color: #60a5fa !important;
+            }
+
+            /* Zoom Button Active State */
+            .zoom-btn.active {
+                background-color: #2563eb !important;
+                color: white !important;
+            }
+            
             /* Special adjustment for shutter button */
             #btn-shutter {
                 margin-top: -12px; /* Bring the shutter button up to overlap slightly with the control bar */
@@ -170,6 +183,17 @@
                 id="shutter-flash"
                 class="absolute inset-0 bg-white opacity-0 pointer-events-none z-50"
             ></div>
+            
+            <!-- ================= ZOOM CONTROLS ================= -->
+            <div class="absolute bottom-32 left-0 right-0 flex justify-center z-40 pointer-events-auto px-4">
+                <div class="flex space-x-2 bg-black/50 backdrop-blur-md rounded-full px-4 py-2">
+                    <button id="btn-zoom-1x" class="zoom-btn w-8 h-8 rounded-full bg-white/20 text-white text-xs font-bold flex items-center justify-center">1x</button>
+                    <button id="btn-zoom-2x" class="zoom-btn w-8 h-8 rounded-full bg-white/20 text-white text-xs font-bold flex items-center justify-center">2x</button>
+                    <button id="btn-zoom-4x" class="zoom-btn w-8 h-8 rounded-full bg-white/20 text-white text-xs font-bold flex items-center justify-center">4x</button>
+                    <button id="btn-zoom-8x" class="zoom-btn w-8 h-8 rounded-full bg-white/20 text-white text-xs font-bold flex items-center justify-center">8x</button>
+                    <button id="btn-zoom-10x" class="zoom-btn w-8 h-8 rounded-full bg-white/20 text-white text-xs font-bold flex items-center justify-center">10x</button>
+                </div>
+            </div>
         </main>
 
         <!-- ================= BOTTOM CONTROLS (SEMANTIK: <footer>) ================= -->

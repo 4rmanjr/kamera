@@ -33,12 +33,39 @@ export class UIController {
         this.eventBus.subscribe('gallery:deleteSelected', (data) => {
             this.confirm(`Hapus ${data.count} foto terpilih?`, data.callback);
         });
+        
+        // Subscribe ke event zoom change
+        this.eventBus.subscribe('zoom:changed', (zoomLevel) => {
+            this.updateZoomUI(zoomLevel);
+        });
     }
 
     initListeners() {
         if (this.dom.btnShutter) this.dom.btnShutter.onclick = () => this.cameraService.shutter();
         if (this.dom.btnSwitch) this.dom.btnSwitch.onclick = () => this.cameraService.switch();
         if (this.dom.btnFlash) this.dom.btnFlash.onclick = () => this.cameraService.toggleFlash();
+        
+        // Zoom buttons event listeners
+        const zoomButtons = {
+            'btn-zoom-1x': 1.0,
+            'btn-zoom-2x': 2.0,
+            'btn-zoom-4x': 4.0,
+            'btn-zoom-8x': 8.0,
+            'btn-zoom-10x': 10.0
+        };
+        
+        Object.entries(zoomButtons).forEach(([buttonId, zoomLevel]) => {
+            const button = document.getElementById(buttonId);
+            if (button) {
+                button.onclick = async () => {
+                    if (this.cameraService) {
+                        await this.cameraService.setZoom(zoomLevel);
+                        this.updateZoomUI(zoomLevel);
+                    }
+                };
+            }
+        });
+        
         if (this.dom.btnGallery) this.dom.btnGallery.onclick = () => this.galleryController.open();
         if (this.dom.btnSettings) this.dom.btnSettings.onclick = () => {
             if (this.dom.modals) this.dom.modals.settings.classList.remove('hidden');
@@ -85,6 +112,13 @@ export class UIController {
                 this.galleryController.deleteSelectedItems();
             }
         };
+        
+        // Initialize zoom UI with current zoom level
+        setTimeout(() => {
+            if (this.cameraService && this.cameraService.state) {
+                this.updateZoomUI(this.cameraService.state.zoomLevel);
+            }
+        }, 0);
 
         const btnCancelSelection = document.getElementById('btn-cancel-selection');
         if (btnCancelSelection) btnCancelSelection.onclick = () => {
@@ -254,6 +288,39 @@ export class UIController {
         const savedLogo = localStorage.getItem('gc_logoImg');
         if (savedLogo) this.loadLogo(savedLogo);
         this.updateSettingsUI(); // Memastikan toggle QR code juga diinisialisasi
+    }
+
+    updateZoomUI(currentZoomLevel) {
+        // Remove active class from all zoom buttons
+        const zoomButtons = document.querySelectorAll('.zoom-btn');
+        zoomButtons.forEach(btn => btn.classList.remove('active'));
+        
+        // Format the zoom level to match button IDs (e.g., 1, 2, 4, 8, 10)
+        // First, check if it's an exact match for our predefined levels
+        const availableLevels = [1, 2, 4, 8, 10];
+        let matchedLevel = null;
+        
+        // Check for exact match first
+        for (const level of availableLevels) {
+            if (currentZoomLevel === level) {
+                matchedLevel = level;
+                break;
+            }
+        }
+        
+        // If no exact match, find the closest level (with some tolerance for floating point errors)
+        if (matchedLevel === null) {
+            matchedLevel = availableLevels.reduce((prev, curr) => 
+                Math.abs(curr - currentZoomLevel) < Math.abs(prev - currentZoomLevel) ? curr : prev
+            );
+        }
+        
+        // Add active class to the current zoom level button
+        const activeButtonId = `btn-zoom-${matchedLevel}x`;
+        const activeButton = document.getElementById(activeButtonId);
+        if (activeButton) {
+            activeButton.classList.add('active');
+        }
     }
 
     startClock() {

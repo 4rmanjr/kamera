@@ -14,21 +14,21 @@ export class CameraService {
     async start() {
         if (this.state.stream) this.state.stream.getTracks().forEach(t => t.stop());
         try {
-            this.state.stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: this.state.facingMode,
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 }
-                },
-                audio: false
+            this.state.stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    facingMode: this.state.facingMode, 
+                    width: { ideal: 1920 }, 
+                    height: { ideal: 1080 } 
+                }, 
+                audio: false 
             });
-
+            
             // Check if video element exists before setting properties
             if (this.dom.video) {
                 this.dom.video.srcObject = this.state.stream;
                 this.dom.video.style.transform = (this.state.facingMode === 'user') ? 'scaleX(-1)' : 'scaleX(1)';
             }
-
+            
             setTimeout(async () => {
                 this.checkCapabilities();
                 // Restore the zoom level after capabilities are checked
@@ -86,9 +86,6 @@ export class CameraService {
 
     async setZoom(zoomLevel) {
         if (!this.state.stream) return;
-
-        // Ensure zoom level is at least 1.0
-        const validatedZoomLevel = Math.max(1.0, zoomLevel);
         
         const videoTrack = this.state.stream.getVideoTracks()[0];
         if (!videoTrack) return;
@@ -99,31 +96,31 @@ export class CameraService {
             if (!capabilities.zoom) {
                 console.log("Zoom not supported by this device, using fallback");
                 // Fallback to CSS transform scale if zoom is not supported
-                this.applyZoomFallback(validatedZoomLevel);
+                this.applyZoomFallback(zoomLevel);
                 return;
             }
 
             // Get the maximum zoom level supported by the device
             const maxZoom = capabilities.zoom.max || 10;
-            const requestedZoom = Math.min(validatedZoomLevel, maxZoom);
-
+            const requestedZoom = Math.min(zoomLevel, maxZoom);
+            
             // Apply the zoom constraint
-            await videoTrack.applyConstraints({
+            await videoTrack.applyConstraints({ 
                 advanced: [{ zoom: requestedZoom }] 
             });
-
+            
             // Update the state with the actual zoom level
             this.state.zoomLevel = requestedZoom;
-
+            
             // Emit event to notify zoom change
             this.eventBus.emit('zoom:changed', requestedZoom);
-
+            
             console.log(`Zoom set to ${requestedZoom}x`);
             return requestedZoom;
         } catch (error) {
             console.error("Error setting zoom:", error);
             // Fallback to CSS transform scale if constraints fail
-            this.applyZoomFallback(validatedZoomLevel);
+            this.applyZoomFallback(zoomLevel);
             return this.state.zoomLevel;
         }
     }
@@ -132,15 +129,15 @@ export class CameraService {
         // Fallback implementation using CSS transform scale
         // This isn't true zoom but provides a similar visual effect
         if (this.dom.video) {
-            // Apply zoom level with horizontal flip if needed - combine both transforms in one call
+            this.dom.video.style.transform = `scale(${zoomLevel})`;
+            // Also maintain the horizontal flip if needed
             const flip = (this.state.facingMode === 'user') ? 'scaleX(-1)' : 'scaleX(1)';
             this.dom.video.style.transform = `scale(${zoomLevel}) ${flip}`;
         }
-        // Ensure zoom level is at least 1.0
-        this.state.zoomLevel = Math.max(1.0, zoomLevel);
-
+        this.state.zoomLevel = zoomLevel;
+        
         // Emit event to notify zoom change
-        this.eventBus.emit('zoom:changed', this.state.zoomLevel);
+        this.eventBus.emit('zoom:changed', zoomLevel);
     }
 
     async resetZoom() {
@@ -159,7 +156,7 @@ export class CameraService {
         }
         await this.canvasProcessorService.capture();
     }
-
+    
     /**
      * Cleanup camera resources
      */
