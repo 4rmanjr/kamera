@@ -551,27 +551,64 @@
             <div
                 class="flex justify-between items-center p-4 bg-gray-900 border-b border-gray-800 z-10 pt-5"
             >
-                <button
-                    id="btn-close-gallery"
-                    class="text-blue-400 text-lg font-medium flex items-center active:text-blue-300"
-                >
-                    <i class="ph ph-caret-left mr-1" aria-hidden="true"></i
-                    >Kembali
-                </button>
-                <h2 id="gallery-title" class="text-lg font-bold text-white">
-                    Galeri
-                    <span
-                        id="lbl-gallery-count"
-                        class="text-sm text-gray-400 font-normal ml-1"
-                    ></span>
-                </h2>
-                <button
-                    id="btn-delete-all"
-                    aria-label="Hapus Semua Foto"
-                    class="w-10 h-10 flex items-center justify-center rounded-full text-red-500 hover:bg-red-900/20 transition"
-                >
-                    <i class="ph ph-trash text-xl" aria-hidden="true"></i>
-                </button>
+                <div id="gallery-header-normal" class="flex justify-between items-center w-full">
+                    <button
+                        id="btn-close-gallery"
+                        class="text-blue-400 text-lg font-medium flex items-center active:text-blue-300"
+                    >
+                        <i class="ph ph-caret-left mr-1" aria-hidden="true"></i
+                        >Kembali
+                    </button>
+                    <h2 id="gallery-title" class="text-lg font-bold text-white">
+                        Galeri
+                        <span
+                            id="lbl-gallery-count"
+                            class="text-sm text-gray-400 font-normal ml-1"
+                        ></span>
+                    </h2>
+                    <div class="flex gap-2">
+                        <button
+                            id="btn-share-selected"
+                            aria-label="Bagikan Foto Terpilih"
+                            class="hidden w-10 h-10 flex items-center justify-center rounded-full text-green-500 hover:bg-green-900/20 transition"
+                        >
+                            <i class="ph ph-share-network text-xl" aria-hidden="true"></i>
+                        </button>
+                        <button
+                            id="btn-delete-all"
+                            aria-label="Hapus Semua Foto"
+                            class="w-10 h-10 flex items-center justify-center rounded-full text-red-500 hover:bg-red-900/20 transition"
+                        >
+                            <i class="ph ph-trash text-xl" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="gallery-header-selected" class="hidden flex justify-between items-center w-full">
+                    <button
+                        id="btn-cancel-selection"
+                        class="text-blue-400 text-lg font-medium flex items-center active:text-blue-300"
+                    >
+                        <i class="ph ph-caret-left mr-1" aria-hidden="true"></i
+                        >Batal
+                    </button>
+                    <span id="lbl-selected-count" class="text-lg font-bold text-white">0 dipilih</span>
+                    <div class="flex gap-2">
+                        <button
+                            id="btn-share-selected-multiple"
+                            aria-label="Bagikan Terpilih"
+                            class="w-10 h-10 flex items-center justify-center rounded-full text-green-500 hover:bg-green-900/20 transition disabled:opacity-50"
+                        >
+                            <i class="ph ph-share-network text-xl" aria-hidden="true"></i>
+                        </button>
+                        <button
+                            id="btn-delete-selected"
+                            aria-label="Hapus Terpilih"
+                            class="w-10 h-10 flex items-center justify-center rounded-full text-red-500 hover:bg-red-900/20 transition disabled:opacity-50"
+                        >
+                            <i class="ph ph-trash text-xl" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
             <div
                 id="gallery-grid"
@@ -615,6 +652,13 @@
                             class="ph ph-download-simple text-xl"
                             aria-hidden="true"
                         ></i>
+                    </button>
+                    <button
+                        id="btn-share"
+                        aria-label="Bagikan Foto"
+                        class="w-10 h-10 flex items-center justify-center bg-green-600/80 backdrop-blur-md rounded-full text-white hover:bg-green-600 transition"
+                    >
+                        <i class="ph ph-share-network text-xl" aria-hidden="true"></i>
                     </button>
                     <button
                         id="btn-delete-one"

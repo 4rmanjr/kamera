@@ -62,6 +62,7 @@ export class DIContainer {
             state: this.state, 
             dom: this.dom, 
             previewController: null, // Akan di-set setelah semua controller dibuat
+            storageService,
             eventBus: this.eventBus 
         });
         

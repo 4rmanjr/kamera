@@ -6,12 +6,15 @@
 import { VirtualGallery } from './virtualGallery.js';
 
 export class GalleryController {
-    constructor({ state, dom, previewController, eventBus }) {
+    constructor({ state, dom, previewController, storageService, eventBus }) {
         this.state = state;
         this.dom = dom;
-        this.previewController = previewController;  // Akan di-set nanti setelah instance dibuat
+        this.previewController = previewController;  // Akan di-set nanti setelah instance dibutuhkan
+        this.storageService = storageService;
         this.eventBus = eventBus;
         this.virtualGallery = null;
+        this.selectedItems = new Set();  // Track selected items
+        this.isSelectionMode = false;    // Track selection mode
 
         // Subscribe ke event terkait foto
         this.eventBus.subscribe('photo:saved', () => {
@@ -28,6 +31,221 @@ export class GalleryController {
 
         this.eventBus.subscribe('gallery:cleared', () => {
             if (this.dom.modals && this.dom.modals.gallery && !this.dom.modals.gallery.classList.contains('hidden')) {
+                this.load();
+            }
+        });
+    }
+
+    enterSelectionMode() {
+        this.isSelectionMode = true;
+        this.selectedItems.clear();
+        this.updateHeaderDisplay();
+        this.updateSelectionCounts();
+    }
+
+    exitSelectionMode() {
+        this.isSelectionMode = false;
+        this.selectedItems.clear();
+        this.updateHeaderDisplay();
+        this.updateSelectionCounts();
+    }
+
+    toggleItemSelection(item) {
+        if (this.selectedItems.has(item.id)) {
+            this.selectedItems.delete(item.id);
+        } else {
+            this.selectedItems.add(item.id);
+        }
+        this.updateSelectionCounts();
+        this.updateItemSelectionUI(item);
+    }
+
+    updateHeaderDisplay() {
+        const normalHeader = document.getElementById('gallery-header-normal');
+        const selectedHeader = document.getElementById('gallery-header-selected');
+        
+        if (this.isSelectionMode) {
+            normalHeader.classList.add('hidden');
+            selectedHeader.classList.remove('hidden');
+        } else {
+            normalHeader.classList.remove('hidden');
+            selectedHeader.classList.add('hidden');
+        }
+    }
+
+    updateSelectionCounts() {
+        const selectedCountLabel = document.getElementById('lbl-selected-count');
+        const shareSelectedBtn = document.getElementById('btn-share-selected-multiple');
+        const deleteSelectedBtn = document.getElementById('btn-delete-selected');
+        
+        if (selectedCountLabel) {
+            selectedCountLabel.innerText = `${this.selectedItems.size} dipilih`;
+        }
+        
+        if (shareSelectedBtn) {
+            shareSelectedBtn.disabled = this.selectedItems.size === 0;
+            shareSelectedBtn.classList.toggle('opacity-50', this.selectedItems.size === 0);
+        }
+        
+        if (deleteSelectedBtn) {
+            deleteSelectedBtn.disabled = this.selectedItems.size === 0;
+            deleteSelectedBtn.classList.toggle('opacity-50', this.selectedItems.size === 0);
+        }
+    }
+
+    updateItemSelectionUI(item) {
+        // Find the element in the gallery grid that corresponds to this item
+        const allItems = this.dom.galleryGrid.querySelectorAll('.gallery-item');
+        allItems.forEach(el => {
+            if (el.dataset.itemId === item.id.toString()) {
+                const isSelected = this.selectedItems.has(item.id);
+                el.classList.toggle('ring-4', isSelected);
+                el.classList.toggle('ring-green-500', isSelected);
+                
+                // Add or remove selection indicator
+                let indicator = el.querySelector('.selection-indicator');
+                if (isSelected) {
+                    if (!indicator) {
+                        indicator = document.createElement('div');
+                        indicator.className = 'selection-indicator absolute top-2 right-2 w-6 h-6 bg-green-600 rounded-full flex items-center justify-center z-10';
+                        indicator.innerHTML = '<i class="ph ph-check text-white text-sm"></i>';
+                        el.appendChild(indicator);
+                    }
+                } else if (indicator) {
+                    indicator.remove();
+                }
+            }
+        });
+    }
+
+    resetAllSelections() {
+        this.selectedItems.clear();
+        const allItems = this.dom.galleryGrid.querySelectorAll('.gallery-item');
+        allItems.forEach(el => {
+            el.classList.remove('ring-4', 'ring-green-500');
+            const indicator = el.querySelector('.selection-indicator');
+            if (indicator) indicator.remove();
+        });
+        this.updateSelectionCounts();
+    }
+
+    async shareSelectedItems() {
+        if (this.selectedItems.size === 0) return;
+
+        try {
+            // Get all photos to match IDs with the selected items
+            const allPhotos = await new Promise((resolve) => {
+                this.eventBus.emit('gallery:loadRequested', (photos) => {
+                    resolve(photos);
+                });
+            });
+
+            // Filter selected photos
+            const selectedPhotos = allPhotos.filter(p => this.selectedItems.has(p.id));
+            
+            if (selectedPhotos.length === 0) {
+                this.exitSelectionMode(); // Exit selection mode if no photos are selected
+                return;
+            }
+
+            // Check if Web Share API supports sharing multiple files
+            if (navigator.share && navigator.canShare) {
+                // Convert selected photos to blob objects with proper types
+                const files = [];
+                
+                // Process photos one by one to manage memory usage
+                for (const photo of selectedPhotos) {
+                    const response = await fetch(photo.data);
+                    const blob = await response.blob();
+                    
+                    // Determine the correct file type from the data URL
+                    const mimeType = photo.data.split(',')[0].split(':')[1].split(';')[0];
+                    
+                    // Extract extension from MIME type
+                    let extension = 'jpg'; // default
+                    if (mimeType === 'image/png') extension = 'png';
+                    else if (mimeType === 'image/gif') extension = 'gif';
+                    else if (mimeType === 'image/webp') extension = 'webp';
+                    else if (mimeType === 'image/jpeg') extension = 'jpg';
+                    
+                    const file = new File([blob], `GeoCam_${photo.id}.${extension}`, { type: mimeType });
+                    files.push(file);
+                }
+
+                // Check if the files can be shared
+                if (navigator.canShare({ files })) {
+                    await navigator.share({
+                        title: `Bagikan ${selectedPhotos.length} foto`,
+                        text: `Berikut adalah ${selectedPhotos.length} foto dari Geo Camera Pro`,
+                        files: files
+                    });
+                } else {
+                    console.log('Sharing these files is not supported by the Web Share API');
+                    // Fallback to download all files
+                    selectedPhotos.forEach(photo => {
+                        const link = document.createElement('a');
+                        // Use proper extension based on data URL
+                        const mimeType = photo.data.split(',')[0].split(':')[1].split(';')[0];
+                        let extension = 'jpg'; // default
+                        if (mimeType === 'image/png') extension = 'png';
+                        else if (mimeType === 'image/gif') extension = 'gif';
+                        else if (mimeType === 'image/webp') extension = 'webp';
+                        else if (mimeType === 'image/jpeg') extension = 'jpg';
+                        link.download = `GeoCam_${photo.id}.${extension}`;
+                        link.href = photo.data;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    });
+                }
+            } else {
+                // Fallback for browsers that don't support file sharing
+                console.log('Web Share API with file sharing not supported, triggering download for selected items');
+                selectedPhotos.forEach(photo => {
+                    const link = document.createElement('a');
+                    // Use proper extension based on data URL
+                    const mimeType = photo.data.split(',')[0].split(':')[1].split(';')[0];
+                    let extension = 'jpg'; // default
+                    if (mimeType === 'image/png') extension = 'png';
+                    else if (mimeType === 'image/gif') extension = 'gif';
+                    else if (mimeType === 'image/webp') extension = 'webp';
+                    else if (mimeType === 'image/jpeg') extension = 'jpg';
+                    link.download = `GeoCam_${photo.id}.${extension}`;
+                    link.href = photo.data;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                });
+            }
+            
+            // Exit selection mode after sharing (only if successful)
+            this.exitSelectionMode();
+        } catch (error) {
+            console.error('Error sharing selected photos:', error);
+            // Ensure selection mode is exited even if sharing fails
+            this.exitSelectionMode();
+        }
+    }
+
+    deleteSelectedItems() {
+        if (this.selectedItems.size === 0) return;
+
+        // Emit an event to UI controller to show the confirmation dialog
+        this.eventBus.emit('gallery:deleteSelected', {
+            count: this.selectedItems.size,
+            callback: () => {
+                const selectedPhotoIds = Array.from(this.selectedItems);
+                
+                // Delete each selected photo
+                selectedPhotoIds.forEach(id => {
+                    this.storageService.delete(id, () => {
+                        // Remove from selection set
+                        this.selectedItems.delete(id);
+                    });
+                });
+
+                // Exit selection mode and refresh gallery
+                this.exitSelectionMode();
                 this.load();
             }
         });

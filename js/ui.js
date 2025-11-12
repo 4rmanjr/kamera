@@ -28,6 +28,11 @@ export class UIController {
         this.eventBus.subscribe('gallery:loadRequested', (callback) => {
             this.storageService.getAll(callback);
         });
+        
+        // Subscribe ke event untuk delete selected photos dari gallery controller
+        this.eventBus.subscribe('gallery:deleteSelected', (data) => {
+            this.confirm(`Hapus ${data.count} foto terpilih?`, data.callback);
+        });
     }
 
     initListeners() {
@@ -60,6 +65,34 @@ export class UIController {
             }
         };
         
+        const btnShareSelected = document.getElementById('btn-share-selected');
+        if (btnShareSelected) btnShareSelected.onclick = () => {
+            if (this.galleryController) {
+                this.galleryController.shareSelectedItems();
+            }
+        };
+
+        const btnShareSelectedMultiple = document.getElementById('btn-share-selected-multiple');
+        if (btnShareSelectedMultiple) btnShareSelectedMultiple.onclick = () => {
+            if (this.galleryController) {
+                this.galleryController.shareSelectedItems();
+            }
+        };
+
+        const btnDeleteSelected = document.getElementById('btn-delete-selected');
+        if (btnDeleteSelected) btnDeleteSelected.onclick = () => {
+            if (this.galleryController) {
+                this.galleryController.deleteSelectedItems();
+            }
+        };
+
+        const btnCancelSelection = document.getElementById('btn-cancel-selection');
+        if (btnCancelSelection) btnCancelSelection.onclick = () => {
+            if (this.galleryController) {
+                this.galleryController.exitSelectionMode();
+            }
+        };
+
         const btnClosePreview = document.getElementById('btn-close-preview');
         if (btnClosePreview) btnClosePreview.onclick = () => {
             if (this.previewController) this.previewController.close();
@@ -80,6 +113,13 @@ export class UIController {
                         if (this.storageService) this.storageService.loadLastThumb();
                     });
                 });
+            }
+        };
+
+        const btnShare = document.getElementById('btn-share');
+        if (btnShare) btnShare.onclick = () => {
+            if (this.previewController) {
+                this.previewController.share();
             }
         };
         
