@@ -114,6 +114,9 @@ local.properties
 *.crx
 *.xpi
 
+# Old project version - not needed in current repository
+web-2.1.2/
+
 # Files that are built/compiled and should not be tracked
 # *.min.js  # Commented out - we need qrcode.min.js
 # *.min.css # Commented out - we need tailwind.css
