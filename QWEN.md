@@ -13,6 +13,8 @@ Geo Camera Pro is a feature-rich mobile PWA (Progressive Web App) camera applica
 5. **Gallery Management**: Local storage and management of captured photos
 6. **Real-time GPS Optimization**: Enhanced geolocation with accuracy improvements
 7. **PWA Capabilities**: Offline-ready features with installable web app
+8. **Global Notification System**: Recently added system for consistent UI notifications
+9. **Android Back Button Handling**: Proper navigation handling for Android users
 
 ### Architecture
 
@@ -29,8 +31,9 @@ The application uses a dependency injection pattern with a centralized container
 2. **LocationService**: Advanced geolocation with real-time optimization and accuracy improvements
 3. **StorageService**: IndexedDB for photo storage and localStorage for settings
 4. **CanvasProcessorService**: Processes captured images with watermarks, text, logos, and QR codes
-5. **GalleryController**: Manages photo gallery view and display
-6. **UIController**: Manages all UI interactions and event handling
+5. **NotificationService**: Global notification system for consistent UI feedback
+6. **GalleryController**: Manages photo gallery view and display
+7. **UIController**: Manages all UI interactions and event handling
 
 ## Building and Running
 
@@ -89,7 +92,9 @@ js/
 ├── storage.js             # IndexedDB and localStorage management
 ├── ui.js                  # UI event handling and controls
 ├── utils.js               # Utility functions
-└── virtualGallery.js      # Virtualized gallery implementation
+├── virtualGallery.js      # Virtualized gallery implementation
+├── notificationService.js # Global notification system
+└── qrCodeGenerator.js     # QR code generation service
 ```
 
 ### Key Technologies

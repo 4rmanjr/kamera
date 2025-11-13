@@ -12,6 +12,11 @@ export class PreviewController {
         this.eventBus = eventBus;
     }
 
+    // Fungsi utilitas untuk menghasilkan timestamp yang konsisten
+    generateTimestamp() {
+        return new Date().toISOString().replace(/[-:]/g, '').replace('T', '_').substring(0, 15);
+    }
+
     open(photo) {
         this.state.currentPhotoId = photo.id;
         this.state.currentPhotoSrc = photo.data;
@@ -21,7 +26,7 @@ export class PreviewController {
         if (this.dom.modals && this.dom.modals.preview) {
             this.dom.modals.preview.classList.remove('hidden');
         }
-        
+
         // Emit event to notify UI controller that preview is opened
         this.eventBus.emit('preview:opened');
     }
@@ -40,12 +45,12 @@ export class PreviewController {
             console.error('No photo to download');
             return;
         }
-        
+
         const link = document.createElement('a');
-        
+
         // Determine the correct file type from the data URL
         const mimeType = this.state.currentPhotoSrc.split(',')[0].split(':')[1].split(';')[0];
-        
+
         // Extract extension from MIME type
         let extension = 'jpg'; // default
         if (mimeType === 'image/png') extension = 'png';
@@ -53,11 +58,10 @@ export class PreviewController {
         else if (mimeType === 'image/webp') extension = 'webp';
         else if (mimeType === 'image/jpeg') extension = 'jpg';
 
-        // Create filename with proper extension
-        const fileName = this.state.currentPhotoId ? 
-            `GeoCam_${this.state.currentPhotoId}.${extension}` : 
-            `GeoCam_${Date.now()}.${extension}`;
-        
+        // Create filename with timestamp and method
+        const timestamp = this.generateTimestamp();
+        const fileName = `GeoCam_${timestamp}_download.${extension}`;
+
         link.download = fileName;
         link.href = this.state.currentPhotoSrc;
         document.body.appendChild(link);
@@ -77,10 +81,10 @@ export class PreviewController {
                 // Convert data URL to blob for sharing
                 const response = await fetch(this.state.currentPhotoSrc);
                 const blob = await response.blob();
-                
+
                 // Determine the correct file type from the data URL
                 const mimeType = this.state.currentPhotoSrc.split(',')[0].split(':')[1].split(';')[0];
-                
+
                 // Extract extension from MIME type
                 let extension = 'jpg'; // default
                 if (mimeType === 'image/png') extension = 'png';
@@ -89,12 +93,11 @@ export class PreviewController {
                 else if (mimeType === 'image/jpeg') extension = 'jpg';
 
                 // Create file object with correct type and extension
-                const fileName = this.state.currentPhotoId ? 
-                    `GeoCam_${this.state.currentPhotoId}.${extension}` : 
-                    `GeoCam_${Date.now()}.${extension}`;
-                    
+                const timestamp = this.generateTimestamp();
+                const fileName = `GeoCam_${timestamp}_share.${extension}`;
+
                 const file = new File([blob], fileName, { type: mimeType });
-                
+
                 // Check if the file can be shared
                 if (navigator.canShare && navigator.canShare({ files: [file] })) {
                     // Share the file
@@ -104,19 +107,28 @@ export class PreviewController {
                         files: [file]
                     });
                 } else {
-                    // Fallback to download if file sharing is not supported
-                    console.log('File sharing not supported by Web Share API, triggering download instead');
-                    this.download();
+                    console.log('File sharing not supported by Web Share API');
+                    // Show notification that sharing is not supported
+                    this.eventBus.emit('notification:show', {
+                        message: 'Platform ini tidak mendukung pembagian file. Silakan gunakan tombol unduh.',
+                        type: 'info'
+                    });
                 }
             } else {
-                // Fallback: trigger download if Web Share API is not supported
-                this.download();
-                console.log('Web Share API not supported, triggering download instead');
+                console.log('Web Share API not supported');
+                // Show notification that sharing is not supported
+                this.eventBus.emit('notification:show', {
+                    message: 'Platform ini tidak mendukung fitur berbagi. Silakan gunakan tombol unduh.',
+                    type: 'info'
+                });
             }
         } catch (error) {
             console.error('Error sharing photo:', error);
-            // If sharing fails, fallback to download
-            this.download();
+            // Show notification about the error
+            this.eventBus.emit('notification:show', {
+                message: 'Gagal membagikan foto. Silakan gunakan tombol unduh.',
+                type: 'error'
+            });
         }
     }
 }

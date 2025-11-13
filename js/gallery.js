@@ -15,25 +15,7 @@ export class GalleryController {
         this.virtualGallery = null;
         this.selectedItems = new Set();  // Track selected items
         this.isSelectionMode = false;    // Track selection mode
-
-        // Subscribe ke event terkait foto
-        this.eventBus.subscribe('photo:saved', () => {
-            if (this.dom.modals && this.dom.modals.gallery && !this.dom.modals.gallery.classList.contains('hidden')) {
-                this.load();
-            }
-        });
-
-        this.eventBus.subscribe('photo:deleted', () => {
-            if (this.dom.modals && this.dom.modals.gallery && !this.dom.modals.gallery.classList.contains('hidden')) {
-                this.load();
-            }
-        });
-
-        this.eventBus.subscribe('gallery:cleared', () => {
-            if (this.dom.modals && this.dom.modals.gallery && !this.dom.modals.gallery.classList.contains('hidden')) {
-                this.load();
-            }
-        });
+        this.currentPhotos = [];  // Cache foto terbaru
     }
 
     enterSelectionMode() {
@@ -61,32 +43,32 @@ export class GalleryController {
     }
 
     updateHeaderDisplay() {
-        const normalHeader = document.getElementById('gallery-header-normal');
-        const selectedHeader = document.getElementById('gallery-header-selected');
-        
+        const normalHeader = this.dom.galleryHeaderNormal;
+        const selectedHeader = this.dom.galleryHeaderSelected;
+
         if (this.isSelectionMode) {
-            normalHeader.classList.add('hidden');
-            selectedHeader.classList.remove('hidden');
+            if (normalHeader) normalHeader.classList.add('hidden');
+            if (selectedHeader) selectedHeader.classList.remove('hidden');
         } else {
-            normalHeader.classList.remove('hidden');
-            selectedHeader.classList.add('hidden');
+            if (normalHeader) normalHeader.classList.remove('hidden');
+            if (selectedHeader) selectedHeader.classList.add('hidden');
         }
     }
 
     updateSelectionCounts() {
-        const selectedCountLabel = document.getElementById('lbl-selected-count');
-        const shareSelectedBtn = document.getElementById('btn-share-selected-multiple');
-        const deleteSelectedBtn = document.getElementById('btn-delete-selected');
-        
+        const selectedCountLabel = this.dom.lblSelectedCount;
+        const shareSelectedBtn = this.dom.btnShareSelectedMultiple;
+        const deleteSelectedBtn = this.dom.btnDeleteSelected;
+
         if (selectedCountLabel) {
             selectedCountLabel.innerText = `${this.selectedItems.size} dipilih`;
         }
-        
+
         if (shareSelectedBtn) {
             shareSelectedBtn.disabled = this.selectedItems.size === 0;
             shareSelectedBtn.classList.toggle('opacity-50', this.selectedItems.size === 0);
         }
-        
+
         if (deleteSelectedBtn) {
             deleteSelectedBtn.disabled = this.selectedItems.size === 0;
             deleteSelectedBtn.classList.toggle('opacity-50', this.selectedItems.size === 0);
@@ -101,7 +83,7 @@ export class GalleryController {
                 const isSelected = this.selectedItems.has(item.id);
                 el.classList.toggle('ring-4', isSelected);
                 el.classList.toggle('ring-green-500', isSelected);
-                
+
                 // Add or remove selection indicator
                 let indicator = el.querySelector('.selection-indicator');
                 if (isSelected) {
@@ -133,16 +115,12 @@ export class GalleryController {
         if (this.selectedItems.size === 0) return;
 
         try {
-            // Get all photos to match IDs with the selected items
-            const allPhotos = await new Promise((resolve) => {
-                this.eventBus.emit('gallery:loadRequested', (photos) => {
-                    resolve(photos);
-                });
-            });
-
+            // Gunakan foto dari cache lokal
+            const allPhotos = this.currentPhotos;
+            
             // Filter selected photos
             const selectedPhotos = allPhotos.filter(p => this.selectedItems.has(p.id));
-            
+
             if (selectedPhotos.length === 0) {
                 this.exitSelectionMode(); // Exit selection mode if no photos are selected
                 return;
@@ -152,23 +130,24 @@ export class GalleryController {
             if (navigator.share && navigator.canShare) {
                 // Convert selected photos to blob objects with proper types
                 const files = [];
-                
+
                 // Process photos one by one to manage memory usage
                 for (const photo of selectedPhotos) {
                     const response = await fetch(photo.data);
                     const blob = await response.blob();
-                    
+
                     // Determine the correct file type from the data URL
                     const mimeType = photo.data.split(',')[0].split(':')[1].split(';')[0];
-                    
+
                     // Extract extension from MIME type
                     let extension = 'jpg'; // default
                     if (mimeType === 'image/png') extension = 'png';
                     else if (mimeType === 'image/gif') extension = 'gif';
                     else if (mimeType === 'image/webp') extension = 'webp';
                     else if (mimeType === 'image/jpeg') extension = 'jpg';
-                    
-                    const file = new File([blob], `GeoCam_${photo.id}.${extension}`, { type: mimeType });
+
+                    const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '_').substring(0, 15);
+                    const file = new File([blob], `GeoCam_${timestamp}_share.${extension}`, { type: mimeType });
                     files.push(file);
                 }
 
@@ -181,43 +160,21 @@ export class GalleryController {
                     });
                 } else {
                     console.log('Sharing these files is not supported by the Web Share API');
-                    // Fallback to download all files
-                    selectedPhotos.forEach(photo => {
-                        const link = document.createElement('a');
-                        // Use proper extension based on data URL
-                        const mimeType = photo.data.split(',')[0].split(':')[1].split(';')[0];
-                        let extension = 'jpg'; // default
-                        if (mimeType === 'image/png') extension = 'png';
-                        else if (mimeType === 'image/gif') extension = 'gif';
-                        else if (mimeType === 'image/webp') extension = 'webp';
-                        else if (mimeType === 'image/jpeg') extension = 'jpg';
-                        link.download = `GeoCam_${photo.id}.${extension}`;
-                        link.href = photo.data;
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
+                    // Show notification that sharing is not supported
+                    this.eventBus.emit('notification:show', {
+                        message: 'Platform ini tidak mendukung pembagian file. Silakan gunakan tombol unduh.',
+                        type: 'info'
                     });
                 }
             } else {
-                // Fallback for browsers that don't support file sharing
-                console.log('Web Share API with file sharing not supported, triggering download for selected items');
-                selectedPhotos.forEach(photo => {
-                    const link = document.createElement('a');
-                    // Use proper extension based on data URL
-                    const mimeType = photo.data.split(',')[0].split(':')[1].split(';')[0];
-                    let extension = 'jpg'; // default
-                    if (mimeType === 'image/png') extension = 'png';
-                    else if (mimeType === 'image/gif') extension = 'gif';
-                    else if (mimeType === 'image/webp') extension = 'webp';
-                    else if (mimeType === 'image/jpeg') extension = 'jpg';
-                    link.download = `GeoCam_${photo.id}.${extension}`;
-                    link.href = photo.data;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
+                // Show notification that sharing is not supported
+                console.log('Web Share API with file sharing not supported');
+                this.eventBus.emit('notification:show', {
+                    message: 'Platform ini tidak mendukung fitur berbagi. Silakan gunakan tombol unduh.',
+                    type: 'info'
                 });
             }
-            
+
             // Exit selection mode after sharing (only if successful)
             this.exitSelectionMode();
         } catch (error) {
@@ -235,7 +192,7 @@ export class GalleryController {
             count: this.selectedItems.size,
             callback: () => {
                 const selectedPhotoIds = Array.from(this.selectedItems);
-                
+
                 // Delete each selected photo
                 selectedPhotoIds.forEach(id => {
                     this.storageService.delete(id, () => {
@@ -269,7 +226,7 @@ export class GalleryController {
             }, 10);
         }
         this.load();
-        
+
         // Emit event to notify UI controller that gallery is opened
         this.eventBus.emit('gallery:opened');
     }
@@ -279,6 +236,13 @@ export class GalleryController {
             this.virtualGallery.destroy();
             this.virtualGallery = null;
         }
+        
+        // Hapus observer jika ada
+        if (this.state.galleryObserver) {
+            this.state.galleryObserver.disconnect();
+            this.state.galleryObserver = null;
+        }
+        
         if (this.dom.modals && this.dom.modals.gallery) {
             this.dom.modals.gallery.classList.add('translate-y-full');
             setTimeout(() => {
@@ -298,11 +262,14 @@ export class GalleryController {
 
         // Kita perlu akses ke storage service melalui event
         this.eventBus.emit('gallery:loadRequested', (photos) => {
-            const lblGalleryCount = document.getElementById('lbl-gallery-count');
+            // Simpan foto ke cache lokal
+            this.currentPhotos = photos;
+            
+            const lblGalleryCount = this.dom.lblGalleryCount;
             if (lblGalleryCount) {
                 lblGalleryCount.innerText = `(${photos.length})`;
             }
-            
+
             if(photos.length === 0) {
                 if (this.dom.galleryGrid) {
                     this.dom.galleryGrid.innerHTML = `<div class="col-span-3 flex flex-col items-center mt-20 text-gray-600"><i class="ph ph-images text-4xl mb-2" aria-hidden="true"></i><span class="text-sm">Galeri Kosong</span></div>`;

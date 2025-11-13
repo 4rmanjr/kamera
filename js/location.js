@@ -30,6 +30,11 @@ export class LocationService {
 
     init() {
         if ("geolocation" in navigator) {
+            // Hentikan watch position yang sebelumnya jika ada
+            if (this.state.watchId) {
+                navigator.geolocation.clearWatch(this.state.watchId);
+            }
+            
             // Reset status lokasi
             this.resetLocationStatus();
             this.initialAcquisitionStartTime = Date.now();
