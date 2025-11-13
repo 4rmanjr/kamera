@@ -22,6 +22,8 @@ window.onload = async () => {
         services.uiController.initListeners();
         services.uiController.loadSettings();
         services.uiController.startClock();
+        // Initialize back button handler after listeners are set up
+        services.uiController.initBackButtonHandler();
         await services.cameraService.start(); // Tunggu kamera siap
         services.locationService.init();
     } catch (err) {

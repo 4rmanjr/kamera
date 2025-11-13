@@ -38,6 +38,19 @@ export class UIController {
         this.eventBus.subscribe('zoom:changed', (zoomLevel) => {
             this.updateZoomUI(zoomLevel);
         });
+        
+        // Subscribe to modal open events
+        this.eventBus.subscribe('gallery:opened', () => {
+            this.registerModalOpen('gallery');
+        });
+        
+        this.eventBus.subscribe('preview:opened', () => {
+            this.registerModalOpen('preview');
+        });
+        
+        this.eventBus.subscribe('settings:opened', () => {
+            this.registerModalOpen('settings');
+        });
     }
 
     initListeners() {
@@ -69,6 +82,8 @@ export class UIController {
         if (this.dom.btnGallery) this.dom.btnGallery.onclick = () => this.galleryController.open();
         if (this.dom.btnSettings) this.dom.btnSettings.onclick = () => {
             if (this.dom.modals) this.dom.modals.settings.classList.remove('hidden');
+            // Emit event to notify that settings modal is opened
+            this.eventBus.emit('settings:opened');
         };
         
         const btnCloseSettings = document.getElementById('btn-close-settings');
@@ -360,5 +375,74 @@ export class UIController {
         
         if (manifestLink) manifestLink.href = manifestUrl;
         if (appleIconLink) appleIconLink.href = iconUrl;
+    }
+    
+    // Handle back button navigation
+    initBackButtonHandler() {
+        // Add event listener for the back button
+        window.addEventListener('popstate', (event) => {
+            this.handleBackButton(event);
+        });
+
+        // Override the default back button behavior by pushing initial state
+        history.replaceState({ page: 'main' }, '', location.href);
+    }
+
+    // Handle back button press based on current modal state
+    handleBackButton(event) {
+        // Check if there are modals open, close them in reverse order of opening
+        if (this.isModalOpen('confirm')) {
+            this.closeModal('confirm');
+            history.pushState({ page: 'main' }, '', location.href);
+            return;
+        }
+        
+        if (this.isModalOpen('preview')) {
+            this.previewController.close();
+            return;
+        }
+        
+        if (this.isModalOpen('gallery')) {
+            // If in selection mode, exit selection mode first
+            if (this.galleryController && this.galleryController.isInSelectionMode()) {
+                this.galleryController.exitSelectionMode();
+                return;
+            } else {
+                this.galleryController.close();
+                return;
+            }
+        }
+        
+        if (this.isModalOpen('settings')) {
+            this.closeModal('settings');
+            return;
+        }
+        
+        // If we're back to the main view and the event state is for main, 
+        // push a new state to prevent the app from exiting
+        if (event.state && event.state.page === 'main') {
+            history.pushState({ page: 'main' }, '', location.href);
+        }
+    }
+
+    // Helper function to check if a modal is open
+    isModalOpen(modalName) {
+        if (!this.dom.modals || !this.dom.modals[modalName]) {
+            return false;
+        }
+        return !this.dom.modals[modalName].classList.contains('hidden');
+    }
+
+    // Helper function to close a modal
+    closeModal(modalName) {
+        if (this.dom.modals && this.dom.modals[modalName]) {
+            this.dom.modals[modalName].classList.add('hidden');
+        }
+    }
+
+    // Method to be called when a modal is opened to add to history
+    registerModalOpen(modalName) {
+        // Push state to browser history to handle back button
+        history.pushState({ page: modalName }, '', location.href);
     }
 }

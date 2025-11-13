@@ -4,11 +4,12 @@
  */
 
 export class CameraService {
-    constructor({ state, dom, canvasProcessorService, eventBus }) {
+    constructor({ state, dom, canvasProcessorService, eventBus, notificationService }) {
         this.state = state;
         this.dom = dom;
         this.canvasProcessorService = canvasProcessorService;
         this.eventBus = eventBus;
+        this.notificationService = notificationService;
     }
 
     async start() {
@@ -148,6 +149,14 @@ export class CameraService {
     }
 
     async shutter() {
+        // Check if GPS location is ready before capturing
+        const isLocationReady = this.isLocationReady();
+        
+        if (!isLocationReady) {
+            // Show notification that GPS is not ready
+            this.showGPSNotification();
+        }
+        
         if(navigator.vibrate) navigator.vibrate(50);
         if (this.dom.flashOverlay) {
             this.dom.flashOverlay.classList.add('flash-active');
@@ -158,6 +167,29 @@ export class CameraService {
             }, 150);
         }
         await this.canvasProcessorService.capture();
+    }
+
+    // Check if GPS location is ready with valid coordinates
+    isLocationReady() {
+        const lat = parseFloat(this.state.location.lat);
+        const lng = parseFloat(this.state.location.lng);
+        
+        // Location is ready if we have valid coordinates (not NaN and not the default 0,0)
+        return !isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0);
+    }
+
+    // Show notification about GPS status using global notification service
+    showGPSNotification() {
+        if (this.notificationService) {
+            this.notificationService.show('GPS belum siap, foto tidak akan berisi lokasi akurat!', 'warning', 3000);
+        } else {
+            // Fallback ke event bus jika notification service tidak tersedia
+            this.eventBus.emit('notification:show', {
+                message: 'GPS belum siap, foto tidak akan berisi lokasi akurat!',
+                type: 'warning',
+                duration: 3000
+            });
+        }
     }
 
     /**

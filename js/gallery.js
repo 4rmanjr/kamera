@@ -255,6 +255,10 @@ export class GalleryController {
         this.previewController = previewController;
     }
 
+    isInSelectionMode() {
+        return this.isSelectionMode;
+    }
+
     open() {
         if (this.dom.modals && this.dom.modals.gallery) {
             this.dom.modals.gallery.classList.remove('hidden');
@@ -265,6 +269,9 @@ export class GalleryController {
             }, 10);
         }
         this.load();
+        
+        // Emit event to notify UI controller that gallery is opened
+        this.eventBus.emit('gallery:opened');
     }
 
     close() {

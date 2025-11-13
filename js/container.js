@@ -15,6 +15,7 @@ import { PreviewController } from './preview.js';
 import { UIController } from './ui.js';
 import { Utils } from './utils.js';
 import { QRCodeGenerator } from './qrCodeGenerator.js';
+import { NotificationService } from './notificationService.js';
 
 
 export class DIContainer {
@@ -28,6 +29,12 @@ export class DIContainer {
 
     // Membuat instance dari semua layanan dengan dependency injection yang benar
     initializeServices() {
+        // Buat notification service terlebih dahulu
+        const notificationService = new NotificationService({
+            dom: this.dom,
+            eventBus: this.eventBus
+        });
+
         // Buat QR code generator
         const qrCodeGenerator = new QRCodeGenerator();
 
@@ -49,7 +56,8 @@ export class DIContainer {
             state: this.state, 
             dom: this.dom, 
             canvasProcessorService,
-            eventBus: this.eventBus 
+            eventBus: this.eventBus,
+            notificationService
         });
         
         const locationService = new LocationService({ 
@@ -98,6 +106,7 @@ export class DIContainer {
         this.services.set('previewController', previewController);
         this.services.set('uiController', uiController);
         this.services.set('qrCodeGenerator', qrCodeGenerator);
+        this.services.set('notificationService', notificationService);
         
         return {
             storageService,
@@ -107,7 +116,8 @@ export class DIContainer {
             galleryController,
             previewController,
             uiController,
-            qrCodeGenerator
+            qrCodeGenerator,
+            notificationService
         };
     }
     

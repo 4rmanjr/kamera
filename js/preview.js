@@ -21,6 +21,9 @@ export class PreviewController {
         if (this.dom.modals && this.dom.modals.preview) {
             this.dom.modals.preview.classList.remove('hidden');
         }
+        
+        // Emit event to notify UI controller that preview is opened
+        this.eventBus.emit('preview:opened');
     }
 
     close() {
