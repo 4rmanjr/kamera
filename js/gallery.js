@@ -16,6 +16,20 @@ export class GalleryController {
         this.selectedItems = new Set();  // Track selected items
         this.isSelectionMode = false;    // Track selection mode
         this.currentPhotos = [];  // Cache foto terbaru
+
+        // Subscribe ke event terkait foto
+        this.eventBus.subscribe('photo:deleted', () => {
+            if (this.dom.modals && this.dom.modals.gallery && !this.dom.modals.gallery.classList.contains('hidden')) {
+                this.load();
+            }
+        });
+
+        // Subscribe ke event terkait galeri
+        this.eventBus.subscribe('gallery:cleared', () => {
+            if (this.dom.modals && this.dom.modals.gallery && !this.dom.modals.gallery.classList.contains('hidden')) {
+                this.load();
+            }
+        });
     }
 
     enterSelectionMode() {

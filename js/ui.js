@@ -51,6 +51,20 @@ export class UIController {
         this.eventBus.subscribe('settings:opened', () => {
             this.registerModalOpen('settings');
         });
+        
+        // Subscribe to photo deleted event to update gallery thumbnail
+        this.eventBus.subscribe('photo:deleted', () => {
+            if (this.storageService) {
+                this.storageService.loadLastThumb();
+            }
+        });
+        
+        // Subscribe to gallery cleared event to update gallery thumbnail
+        this.eventBus.subscribe('gallery:cleared', () => {
+            if (this.storageService) {
+                this.storageService.loadLastThumb();
+            }
+        });
     }
 
     initListeners() {
