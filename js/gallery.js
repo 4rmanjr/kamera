@@ -304,13 +304,13 @@ export class GalleryController {
                         visibleBuffer: 10, // Jumlah buffer item
                         itemClass: 'aspect-square bg-gray-900 relative border border-gray-800 cursor-pointer overflow-hidden',
                         onItemSelect: (item, index) => {
-                            this.previewController.open(item);
+                            this.previewController.openWithPhotos(item, this.currentPhotos);
                         },
                         itemRenderer: (item, index) => {
                             const div = document.createElement('div');
                             div.className = 'aspect-square bg-gray-900 relative border border-gray-800 cursor-pointer overflow-hidden';
                             div.innerHTML = `<img data-src="${item.data}" class="w-full h-full object-cover opacity-0 transition-opacity duration-300" loading="lazy" alt="Foto galeri ${item.id}">`;
-                            div.onclick = () => this.previewController.open(item);
+                            div.onclick = () => this.previewController.openWithPhotos(item, this.currentPhotos);
                             return div;
                         }
                     });
@@ -325,7 +325,7 @@ export class GalleryController {
                         const div = document.createElement('div');
                         div.className = 'aspect-square bg-gray-900 relative border border-gray-800 cursor-pointer overflow-hidden';
                         div.innerHTML = `<img data-src="${p.data}" class="w-full h-full object-cover opacity-0 transition-opacity duration-300" loading="lazy" alt="Foto galeri ${p.id}">`;
-                        div.onclick = () => this.previewController.open(p);
+                        div.onclick = () => this.previewController.openWithPhotos(p, this.currentPhotos);
                         fragment.appendChild(div);
                     });
                     this.dom.galleryGrid.appendChild(fragment);

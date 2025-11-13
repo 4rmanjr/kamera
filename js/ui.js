@@ -28,26 +28,26 @@ export class UIController {
         this.eventBus.subscribe('gallery:loadRequested', (callback) => {
             this.storageService.getAll(callback);
         });
-        
+
         // Subscribe ke event untuk delete selected photos dari gallery controller
         this.eventBus.subscribe('gallery:deleteSelected', (data) => {
             this.confirm(`Hapus ${data.count} foto terpilih?`, data.callback);
         });
-        
+
         // Subscribe ke event zoom change
         this.eventBus.subscribe('zoom:changed', (zoomLevel) => {
             this.updateZoomUI(zoomLevel);
         });
-        
+
         // Subscribe to modal open events
         this.eventBus.subscribe('gallery:opened', () => {
             this.registerModalOpen('gallery');
         });
-        
+
         this.eventBus.subscribe('preview:opened', () => {
             this.registerModalOpen('preview');
         });
-        
+
         this.eventBus.subscribe('settings:opened', () => {
             this.registerModalOpen('settings');
         });
@@ -71,7 +71,7 @@ export class UIController {
         if (this.dom.btnShutter) this.dom.btnShutter.onclick = () => this.cameraService.shutter();
         if (this.dom.btnSwitch) this.dom.btnSwitch.onclick = () => this.cameraService.switch();
         if (this.dom.btnFlash) this.dom.btnFlash.onclick = () => this.cameraService.toggleFlash();
-        
+
         // Zoom buttons event listeners
         const zoomButtons = {
             'btn-zoom-1x': 1.0,
@@ -80,7 +80,7 @@ export class UIController {
             'btn-zoom-8x': 8.0,
             'btn-zoom-10x': 10.0
         };
-        
+
         Object.entries(zoomButtons).forEach(([buttonId, zoomLevel]) => {
             const button = document.getElementById(buttonId);
             if (button) {
@@ -92,24 +92,24 @@ export class UIController {
                 };
             }
         });
-        
+
         if (this.dom.btnGallery) this.dom.btnGallery.onclick = () => this.galleryController.open();
         if (this.dom.btnSettings) this.dom.btnSettings.onclick = () => {
             if (this.dom.modals) this.dom.modals.settings.classList.remove('hidden');
             // Emit event to notify that settings modal is opened
             this.eventBus.emit('settings:opened');
         };
-        
+
         const btnCloseSettings = document.getElementById('btn-close-settings');
         if (btnCloseSettings) btnCloseSettings.onclick = () => {
             if (this.dom.modals) this.dom.modals.settings.classList.add('hidden');
         };
-        
+
         const btnCloseGallery = document.getElementById('btn-close-gallery');
         if (btnCloseGallery) btnCloseGallery.onclick = () => {
             if (this.galleryController) this.galleryController.close();
         };
-        
+
         const btnDeleteAll = document.getElementById('btn-delete-all');
         if (btnDeleteAll) btnDeleteAll.onclick = () => {
             if (this.confirm && this.storageService && this.galleryController) {
@@ -120,7 +120,7 @@ export class UIController {
                 });
             }
         };
-        
+
         const btnShareSelected = document.getElementById('btn-share-selected');
         if (btnShareSelected) btnShareSelected.onclick = () => {
             if (this.galleryController) {
@@ -141,7 +141,7 @@ export class UIController {
                 this.galleryController.deleteSelectedItems();
             }
         };
-        
+
         // Initialize zoom UI with current zoom level
         setTimeout(() => {
             if (this.cameraService && this.cameraService.state) {
@@ -160,12 +160,12 @@ export class UIController {
         if (btnClosePreview) btnClosePreview.onclick = () => {
             if (this.previewController) this.previewController.close();
         };
-        
+
         const btnDownload = document.getElementById('btn-download');
         if (btnDownload) btnDownload.onclick = () => {
             if (this.previewController) this.previewController.download();
         };
-        
+
         const btnDeleteOne = document.getElementById('btn-delete-one');
         if (btnDeleteOne) btnDeleteOne.onclick = () => {
             if (this.confirm && this.storageService && this.previewController && this.galleryController) {
@@ -185,18 +185,50 @@ export class UIController {
                 this.previewController.share();
             }
         };
-        
+
+        // Setup swipe gestures for photo navigation in preview modal
+        if (this.dom.modals.preview) {
+            let startX = 0;
+            let startY = 0;
+
+            this.dom.modals.preview.addEventListener('touchstart', (e) => {
+                startX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
+            }, { passive: true });
+
+            this.dom.modals.preview.addEventListener('touchend', (e) => {
+                const endX = e.changedTouches[0].clientX;
+                const endY = e.changedTouches[0].clientY;
+                
+                const diffX = startX - endX;
+                const diffY = startY - endY;
+                
+                // Cek apakah gerakan utamanya horizontal
+                if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 30) {
+                    if (this.previewController && this.previewController.currentPhotos && this.previewController.currentPhotos.length > 0) {
+                        if (diffX > 0) {
+                            // Swipe kiri - ke foto berikutnya
+                            this.previewController.next();
+                        } else {
+                            // Swipe kanan - ke foto sebelumnya
+                            this.previewController.prev();
+                        }
+                    }
+                }
+            }, { passive: true });
+        }
+
         const btnConfirmNo = document.getElementById('btn-confirm-no');
         if (btnConfirmNo) btnConfirmNo.onclick = () => {
             if (this.dom.modals) this.dom.modals.confirm.classList.add('hidden');
         };
-        
+
         const btnConfirmYes = document.getElementById('btn-confirm-yes');
         if (btnConfirmYes) btnConfirmYes.onclick = () => {
             if(this.state.confirmCallback) this.state.confirmCallback();
             if (this.dom.modals) this.dom.modals.confirm.classList.add('hidden');
         };
-        
+
         if (this.dom.inpProject) this.dom.inpProject.oninput = (e) => {
             this.utils.updateSetting(this.state.settings, 'projName', e.target.value);
         };
@@ -213,21 +245,21 @@ export class UIController {
                 r.readAsDataURL(e.target.files[0]);
             }
         };
-        
+
         const btnClearLogo = document.getElementById('btn-clear-logo');
         if (btnClearLogo) btnClearLogo.onclick = () => this.confirm("Hapus logo?", () => {
             localStorage.removeItem('gc_logoImg');
             this.loadLogo(null);
             if (this.dom.inpLogo) this.dom.inpLogo.value = '';
         });
-        
+
         // Use classList for all buttons with the same class
         const btnSizeElements = document.querySelectorAll('.btn-size');
         btnSizeElements.forEach(btn => btn.onclick = () => {
             this.utils.updateSetting(this.state.settings, 'textSize', btn.dataset.size);
             this.updateSettingsUI();
         });
-        
+
         const btnPosElements = document.querySelectorAll('.btn-pos');
         btnPosElements.forEach(btn => btn.onclick = () => {
             if (btn.dataset.type === 'text') {
@@ -288,7 +320,7 @@ export class UIController {
                 b.classList.toggle('btn-active', b.dataset.size === this.state.settings.textSize);
             }
         });
-        
+
         const btnPosElements = document.querySelectorAll('.btn-pos');
         btnPosElements.forEach(b => {
             let target = this.state.settings.textPos;
@@ -323,12 +355,12 @@ export class UIController {
         // Remove active class from all zoom buttons
         const zoomButtons = document.querySelectorAll('.zoom-btn');
         zoomButtons.forEach(btn => btn.classList.remove('active'));
-        
+
         // Format the zoom level to match button IDs (e.g., 1, 2, 4, 8, 10)
         // First, check if it's an exact match for our predefined levels
         const availableLevels = [1, 2, 4, 8, 10];
         let matchedLevel = null;
-        
+
         // Check for exact match first
         for (const level of availableLevels) {
             if (currentZoomLevel === level) {
@@ -336,14 +368,14 @@ export class UIController {
                 break;
             }
         }
-        
+
         // If no exact match, find the closest level (with some tolerance for floating point errors)
         if (matchedLevel === null) {
-            matchedLevel = availableLevels.reduce((prev, curr) => 
+            matchedLevel = availableLevels.reduce((prev, curr) =>
                 Math.abs(curr - currentZoomLevel) < Math.abs(prev - currentZoomLevel) ? curr : prev
             );
         }
-        
+
         // Add active class to the current zoom level button
         const activeButtonId = `btn-zoom-${matchedLevel}x`;
         const activeButton = document.getElementById(activeButtonId);
@@ -386,11 +418,11 @@ export class UIController {
         // 3. Inject ke <head>
         const manifestLink = document.querySelector('link[rel="manifest"]');
         const appleIconLink = document.querySelector('link[rel="apple-touch-icon"]');
-        
+
         if (manifestLink) manifestLink.href = manifestUrl;
         if (appleIconLink) appleIconLink.href = iconUrl;
     }
-    
+
     // Handle back button navigation
     initBackButtonHandler() {
         // Add event listener for the back button
@@ -410,12 +442,12 @@ export class UIController {
             history.pushState({ page: 'main' }, '', location.href);
             return;
         }
-        
+
         if (this.isModalOpen('preview')) {
             this.previewController.close();
             return;
         }
-        
+
         if (this.isModalOpen('gallery')) {
             // If in selection mode, exit selection mode first
             if (this.galleryController && this.galleryController.isInSelectionMode()) {
@@ -426,13 +458,13 @@ export class UIController {
                 return;
             }
         }
-        
+
         if (this.isModalOpen('settings')) {
             this.closeModal('settings');
             return;
         }
-        
-        // If we're back to the main view and the event state is for main, 
+
+        // If we're back to the main view and the event state is for main,
         // push a new state to prevent the app from exiting
         if (event.state && event.state.page === 'main') {
             history.pushState({ page: 'main' }, '', location.href);

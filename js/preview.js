@@ -10,6 +10,8 @@ export class PreviewController {
         this.storageService = storageService;
         this.galleryController = galleryController;
         this.eventBus = eventBus;
+        this.currentPhotos = [];  // Cache untuk menyimpan daftar foto saat ini
+        this.currentIndex = -1;  // Index foto saat ini dalam daftar
     }
 
     // Fungsi utilitas untuk menghasilkan timestamp yang konsisten
@@ -29,6 +31,49 @@ export class PreviewController {
 
         // Emit event to notify UI controller that preview is opened
         this.eventBus.emit('preview:opened');
+    }
+
+    openWithPhotos(photo, photos) {
+        // Simpan daftar foto
+        this.currentPhotos = photos;
+        // Temukan indeks foto saat ini
+        this.currentIndex = photos.findIndex(p => p.id === photo.id);
+        
+        // Jika foto tidak ditemukan dalam daftar, atur ke indeks pertama jika ada foto
+        if (this.currentIndex === -1 && photos.length > 0) {
+            this.currentIndex = 0;
+        }
+
+        // Buka pratinjau foto
+        this.open(photo);
+    }
+
+    next() {
+        if (this.currentPhotos.length === 0 || this.currentIndex === -1) {
+            // Tidak bisa navigasi jika tidak ada foto atau indeks tidak valid
+            return null;
+        }
+
+        const nextIndex = (this.currentIndex + 1) % this.currentPhotos.length;
+        this.currentIndex = nextIndex;
+        const nextPhoto = this.currentPhotos[nextIndex];
+
+        this.open(nextPhoto);
+        return nextPhoto;
+    }
+
+    prev() {
+        if (this.currentPhotos.length === 0 || this.currentIndex === -1) {
+            // Tidak bisa navigasi jika tidak ada foto atau indeks tidak valid
+            return null;
+        }
+
+        const prevIndex = (this.currentIndex - 1 + this.currentPhotos.length) % this.currentPhotos.length;
+        this.currentIndex = prevIndex;
+        const prevPhoto = this.currentPhotos[prevIndex];
+
+        this.open(prevPhoto);
+        return prevPhoto;
     }
 
     close() {
