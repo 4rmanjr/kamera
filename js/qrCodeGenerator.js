@@ -33,34 +33,201 @@ export class QRCodeGenerator {
     }
 
     /**
-     * Fungsi untuk membuat QR code menggunakan library qrcode global
+     * Fungsi untuk membuat QR code menggunakan library qrcodejs secara langsung dengan canvas
      */
     async createQRCode(text) {
         try {
-            // Gunakan QR Server API sebagai fallback utama
-            const url = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(text)}`;
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error('QR Server API failed');
-            }
-            const blob = await response.blob();
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.readAsDataURL(blob);
-            });
-        } catch (error) {
-            console.error('Error generating QR with API:', error);
+            // Gunakan library qrcodejs yang tersedia secara lokal
+            if (typeof QRCode !== 'undefined') {
+                // Buat div sementara untuk digunakan oleh library qrcodejs
+                const tempDiv = document.createElement('div');
 
-            // Gunakan fallback local jika API gagal
-            return this.createDefaultQR(text);
+                // Buat QR code instance dengan level koreksi tertinggi
+                const qr = new QRCode(tempDiv, {
+                    text: text,
+                    width: 200,  // Ukuran QR code
+                    height: 200, // Ukuran QR code
+                    colorDark: "#000000",  // Warna modul gelap (hitam)
+                    colorLight: "#FFFFFF", // Warna modul terang (putih)
+                    correctLevel: QRCode.CorrectLevel.H // Tingkat koreksi kesalahan tertinggi
+                });
+
+                // Generate QR code
+                qr.makeCode(text);
+
+                // Tunggu sebentar agar gambar selesai dirender
+                await new Promise(resolve => setTimeout(resolve, 50));
+
+                // Konversi SVG atau elemen HTML ke canvas
+                const svgElement = tempDiv.querySelector('svg');
+                if (svgElement) {
+                    // Jika output dalam bentuk SVG
+                    return this.convertSVGToDataURL(svgElement, 300);
+                } else {
+                    // Jika output dalam bentuk canvas langsung
+                    const canvasElement = tempDiv.querySelector('canvas');
+                    if (canvasElement) {
+                        return canvasElement.toDataURL('image/png', 1.0);
+                    } else {
+                        // Jika tidak ada SVG maupun canvas, buat dari tabel
+                        return this.createCanvasFromTable(tempDiv, 300);
+                    }
+                }
+            } else {
+                console.warn('QRCode library not available, using fallback');
+                return this.createDefaultQR(text);
+            }
+        } catch (error) {
+            console.error('Error generating QR with qrcodejs:', error);
+
+            // Coba metode alternatif jika metode utama gagal
+            try {
+                // Buat QR code instance tanpa DOM langsung
+                const qr = new QRCode(10, QRCode.CorrectLevel.H);
+                qr.addData(text);
+                qr.make();
+
+                // Buat canvas dengan ukuran yang cukup besar untuk kualitas tinggi
+                const canvasSize = 300; // Ukuran canvas yang diinginkan
+                const canvas = document.createElement('canvas');
+                canvas.width = canvasSize;
+                canvas.height = canvasSize;
+                const ctx = canvas.getContext('2d');
+
+                // Hitung ukuran modul QR
+                const modulesCount = qr.getModuleCount();
+
+                // Tambahkan quiet zone standar sebesar 4 modul di sekelilingnya
+                const quietZone = 4;
+                const totalSize = modulesCount + 2 * quietZone;
+
+                // Ukuran tiap modul
+                const moduleSize = Math.floor(canvasSize / totalSize);
+
+                // Hitung posisi awal agar QR code terpusat
+                const startX = Math.floor((canvasSize - (modulesCount * moduleSize)) / 2);
+                const startY = Math.floor((canvasSize - (modulesCount * moduleSize)) / 2);
+
+                // Gambar background putih (penting untuk QR code sesuai standar)
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, canvasSize, canvasSize);
+
+                // Gambar setiap modul QR dengan warna hitam
+                ctx.fillStyle = '#000000';
+                for (let row = 0; row < modulesCount; row++) {
+                    for (let col = 0; col < modulesCount; col++) {
+                        if (qr.isDark(row, col)) {
+                            const x = startX + ((col + quietZone) * moduleSize);
+                            const y = startY + ((row + quietZone) * moduleSize);
+
+                            // Gambar kotak modul
+                            ctx.fillRect(x, y, moduleSize, moduleSize);
+                        }
+                    }
+                }
+
+                return canvas.toDataURL('image/png', 1.0);
+            } catch (fallbackError) {
+                console.error('QR fallback method also failed:', fallbackError);
+                // Jika semua metode gagal, gunakan fallback default
+                return this.createDefaultQR(text);
+            }
         }
+    }
+
+    /**
+     * Fungsi untuk mengonversi SVG ke data URL
+     */
+    convertSVGToDataURL(svgElement, size) {
+        return new Promise((resolve) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+
+            const svgData = new XMLSerializer().serializeToString(svgElement);
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const svgUrl = URL.createObjectURL(svgBlob);
+
+            const img = new Image();
+            img.onload = () => {
+                // Gambar background putih dulu
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, size, size);
+
+                // Gambar SVG ke dalam canvas
+                ctx.drawImage(img, 0, 0, size, size);
+
+                // Bebaskan URL objek
+                URL.revokeObjectURL(svgUrl);
+
+                resolve(canvas.toDataURL('image/png', 1.0));
+            };
+
+            img.onerror = () => {
+                // Jika gagal, kembalikan fallback
+                URL.revokeObjectURL(svgUrl);
+                resolve(this.createDefaultQR("Failed to load SVG"));
+            };
+
+            img.src = svgUrl;
+        });
+    }
+
+    /**
+     * Fungsi untuk membuat canvas dari elemen tabel
+     */
+    createCanvasFromTable(divElement, size) {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        // Cari tabel QR code
+        const table = divElement.querySelector('table');
+        if (!table) {
+            return this.createDefaultQR("No table found");
+        }
+
+        // Dapatkan ukuran tabel
+        const rows = table.querySelectorAll('tr');
+        const modulesCount = rows.length;
+
+        if (modulesCount === 0) {
+            return this.createDefaultQR("Empty table");
+        }
+
+        // Ukuran tiap modul
+        const moduleSize = Math.floor(size / modulesCount);
+
+        // Gambar background putih
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, size, size);
+
+        // Iterasi setiap sel dalam tabel
+        for (let row = 0; row < modulesCount; row++) {
+            const cells = rows[row].querySelectorAll('td');
+            for (let col = 0; col < modulesCount; col++) {
+                if (cells[col]) {
+                    // Dapatkan warna latar belakang sel
+                    const bgColor = window.getComputedStyle(cells[col]).backgroundColor;
+                    // Jika warna gelap (hitam/abu-abu gelap), gambar kotak hitam
+                    if (bgColor && (bgColor.includes('0, 0, 0') || bgColor.includes('0,0,0') || bgColor.includes('33, 33, 33'))) {
+                        ctx.fillStyle = 'black';
+                        ctx.fillRect(col * moduleSize, row * moduleSize, moduleSize, moduleSize);
+                    }
+                }
+            }
+        }
+
+        return canvas.toDataURL('image/png', 1.0);
     }
 
     /**
      * Fungsi untuk membuat QR default jika library gagal - gambar teks URL sebagai fallback
      */
     async createDefaultQR(defaultText) {
+        // Gunakan fallback yang lebih representatif dari sebelumnya
         const canvas = document.createElement('canvas');
         const size = 300;
         canvas.width = size;
@@ -71,13 +238,16 @@ export class QRCodeGenerator {
         ctx.fillStyle = 'white';
         ctx.fillRect(0, 0, size, size);
 
-        // Gambar teks URL
+        // Gambar struktur QR sederhana agar lebih representatif
+        this.drawSimpleQR(ctx, size);
+
+        // Tambahkan URL sebagai teks di tengah
         ctx.fillStyle = 'black';
-        ctx.font = '16px Arial';
+        ctx.font = '12px Arial';
         ctx.textAlign = 'center';
-        const lines = defaultText.match(/.{1,20}/g) || [defaultText];
+        const lines = defaultText.match(/.{1,30}/g) || [defaultText];
         lines.forEach((line, i) => {
-            ctx.fillText(line, size/2, size/2 + (i * 20));
+            ctx.fillText(line, size/2, size/2 + (i * 15));
         });
 
         return canvas.toDataURL('image/png');

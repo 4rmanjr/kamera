@@ -1,0 +1,122 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+/dist/
+/build/
+/public/
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.development
+
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+.gitattributes
+*~
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# Temporary folders
+tmp/
+temp/
+
+# System Files
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Archives
+*.zip
+*.tar*
+*.rar
+*.7z
+
+# Private keys
+*.key
+*.pem
+*.crt
+*.cert
+
+# Database
+*.db
+*.sqlite
+
+# Cache
+.cache/
+.nyc_output/
+
+# Lock files - uncommented to track dependency versions
+# package-lock.json
+# yarn.lock
+
+# Local config files
+config.local.js
+local.properties
+
+# Mobile app build files
+/platforms/
+/plugins/
+/platform/
+/www/build/
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Large files that should be managed separately
+*.mp4
+*.mov
+*.avi
+*.iso
+*.dmg
+
+# ZIP files
+*.zip
+
+# Android backup files
+*.aab
+*.apk
+
+# iOS build files
+*.ipa
+*.app
+
+# Browser extensions
+*.crx
+*.xpi
+
+# Files that are built/compiled and should not be tracked
+# *.min.js  # Commented out - we need qrcode.min.js
+# *.min.css # Commented out - we need tailwind.css
+
+# Service worker - uncommented because it's essential for PWA
+# /sw.js

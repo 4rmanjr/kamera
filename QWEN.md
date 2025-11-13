@@ -8,11 +8,11 @@ Geo Camera Pro is a feature-rich mobile PWA (Progressive Web App) camera applica
 
 1. **Geotagged Photography**: Photos are automatically watermarked with GPS coordinates, accuracy, and timestamp
 2. **Custom Watermarks**: Support for project names, notes, custom logos, and positioning
-3. **QR Code Integration**: QR codes containing location data are embedded in photos
+3. **QR Code Integration**: QR codes containing location data are embedded in photos (using local qrcodejs library)
 4. **Camera Controls**: Flash, zoom (1x-10x), and camera switching functionality
 5. **Gallery Management**: Local storage and management of captured photos
 6. **Real-time GPS Optimization**: Enhanced geolocation with accuracy improvements
-7. **PWA Capabilities**: Offline-ready features with installable web app
+7. **PWA Capabilities**: Fully offline-ready features with installable web app
 8. **Global Notification System**: Recently added system for consistent UI notifications
 9. **Android Back Button Handling**: Proper navigation handling for Android users
 
@@ -37,7 +37,19 @@ The application uses a dependency injection pattern with a centralized container
 
 ## Building and Running
 
-This is a static web application with no build process required:
+This is a static web application that requires a build process for optimal offline functionality:
+
+### Building the Application
+
+1. Build Tailwind CSS with proper content scanning:
+   ```bash
+   npx tailwindcss -o ./css/tailwind.css --minify
+   ```
+
+2. Ensure all dependencies are properly installed:
+   ```bash
+   npm install
+   ```
 
 ### Running the Application
 
@@ -45,18 +57,19 @@ This is a static web application with no build process required:
    ```bash
    # Using Python
    python -m http.server 8000
-   
+
    # Using Node.js
    npx http-server
-   
+
    # Using PHP
    php -S localhost:8000
    ```
-   
+
 2. Open the application in a mobile browser (for camera and geolocation access)
 
 ### Development Commands
 
+- **Build CSS**: `npx tailwindcss -o ./css/tailwind.css --minify`
 - **Serve**: Use any static file server (as shown above)
 - **Lint**: Manual code review based on guidelines in AGENTS.md
 - **Test**: Test functionality in browser, particularly in mobile environment
