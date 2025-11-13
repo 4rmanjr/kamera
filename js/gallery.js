@@ -16,6 +16,11 @@ export class GalleryController {
         this.selectedItems = new Set();  // Track selected items
         this.isSelectionMode = false;    // Track selection mode
         this.currentPhotos = [];  // Cache foto terbaru
+        
+        // Define constants for DOM class names to avoid hardcoded strings
+        this.GALLERY_ITEM_CLASS = 'gallery-item';
+        this.SELECTION_INDICATOR_CLASS = 'selection-indicator';
+        this.SELECTION_RING_CLASSES = ['ring-4', 'ring-green-500'];
 
         // Subscribe ke event terkait foto
         this.eventBus.subscribe('photo:deleted', () => {
@@ -91,19 +96,22 @@ export class GalleryController {
 
     updateItemSelectionUI(item) {
         // Find the element in the gallery grid that corresponds to this item
-        const allItems = this.dom.galleryGrid.querySelectorAll('.gallery-item');
+        const allItems = this.dom.galleryGrid.querySelectorAll(`.${this.GALLERY_ITEM_CLASS}`);
         allItems.forEach(el => {
             if (el.dataset.itemId === item.id.toString()) {
                 const isSelected = this.selectedItems.has(item.id);
-                el.classList.toggle('ring-4', isSelected);
-                el.classList.toggle('ring-green-500', isSelected);
+                
+                // Apply or remove selection ring classes
+                this.SELECTION_RING_CLASSES.forEach(ringClass => {
+                    el.classList.toggle(ringClass, isSelected);
+                });
 
                 // Add or remove selection indicator
-                let indicator = el.querySelector('.selection-indicator');
+                let indicator = el.querySelector(`.${this.SELECTION_INDICATOR_CLASS}`);
                 if (isSelected) {
                     if (!indicator) {
                         indicator = document.createElement('div');
-                        indicator.className = 'selection-indicator absolute top-2 right-2 w-6 h-6 bg-green-600 rounded-full flex items-center justify-center z-10';
+                        indicator.className = `${this.SELECTION_INDICATOR_CLASS} absolute top-2 right-2 w-6 h-6 bg-green-600 rounded-full flex items-center justify-center z-10`;
                         indicator.innerHTML = '<i class="ph ph-check text-white text-sm"></i>';
                         el.appendChild(indicator);
                     }
@@ -116,10 +124,10 @@ export class GalleryController {
 
     resetAllSelections() {
         this.selectedItems.clear();
-        const allItems = this.dom.galleryGrid.querySelectorAll('.gallery-item');
+        const allItems = this.dom.galleryGrid.querySelectorAll(`.${this.GALLERY_ITEM_CLASS}`);
         allItems.forEach(el => {
-            el.classList.remove('ring-4', 'ring-green-500');
-            const indicator = el.querySelector('.selection-indicator');
+            el.classList.remove(...this.SELECTION_RING_CLASSES);
+            const indicator = el.querySelector(`.${this.SELECTION_INDICATOR_CLASS}`);
             if (indicator) indicator.remove();
         });
         this.updateSelectionCounts();
@@ -160,8 +168,13 @@ export class GalleryController {
                     else if (mimeType === 'image/webp') extension = 'webp';
                     else if (mimeType === 'image/jpeg') extension = 'jpg';
 
-                    const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '_').substring(0, 15);
-                    const file = new File([blob], `GeoCam_${timestamp}_share.${extension}`, { type: mimeType });
+                    // Create a more unique filename using milliseconds and a counter
+                    const now = new Date();
+                    const timestamp = now.toISOString().replace(/[-:]/g, '').replace('T', '_').slice(0, 15);
+                    const milliseconds = String(now.getMilliseconds()).padStart(3, '0');
+                    // Use photo id as additional uniqueness factor
+                    const uniqueId = `${timestamp}${milliseconds}_${photo.id}`;
+                    const file = new File([blob], `GeoCam_${uniqueId}_share.${extension}`, { type: mimeType });
                     files.push(file);
                 }
 
@@ -233,11 +246,21 @@ export class GalleryController {
     open() {
         if (this.dom.modals && this.dom.modals.gallery) {
             this.dom.modals.gallery.classList.remove('hidden');
-            setTimeout(() => {
+            
+            // Use a small timeout just to ensure the element is rendered before starting transition
+            // Then use transitionend event to handle the transition completion
+            requestAnimationFrame(() => {
                 if (this.dom.modals && this.dom.modals.gallery) {
-                    this.dom.modals.gallery.classList.remove('translate-y-full');
+                    // Add event listener for transition end
+                    const galleryElement = this.dom.modals.gallery;
+                    const handleTransitionEnd = () => {
+                        galleryElement.removeEventListener('transitionend', handleTransitionEnd);
+                    };
+                    
+                    galleryElement.addEventListener('transitionend', handleTransitionEnd);
+                    galleryElement.classList.remove('translate-y-full');
                 }
-            }, 10);
+            });
         }
         this.load();
 
@@ -258,12 +281,15 @@ export class GalleryController {
         }
         
         if (this.dom.modals && this.dom.modals.gallery) {
-            this.dom.modals.gallery.classList.add('translate-y-full');
-            setTimeout(() => {
-                if (this.dom.modals && this.dom.modals.gallery) {
-                    this.dom.modals.gallery.classList.add('hidden');
-                }
-            }, 300);
+            // Add event listener for transition end to hide the modal after animation completes
+            const galleryElement = this.dom.modals.gallery;
+            const handleTransitionEnd = () => {
+                galleryElement.classList.add('hidden');
+                galleryElement.removeEventListener('transitionend', handleTransitionEnd);
+            };
+            
+            galleryElement.addEventListener('transitionend', handleTransitionEnd);
+            galleryElement.classList.add('translate-y-full');
         }
     }
 
@@ -304,13 +330,23 @@ export class GalleryController {
                         visibleBuffer: 10, // Jumlah buffer item
                         itemClass: 'aspect-square bg-gray-900 relative border border-gray-800 cursor-pointer overflow-hidden',
                         onItemSelect: (item, index) => {
-                            this.previewController.openWithPhotos(item, this.currentPhotos);
+                            if (this.previewController) {
+                                this.previewController.openWithPhotos(item, this.currentPhotos);
+                            } else {
+                                console.warn('Preview controller not initialized');
+                            }
                         },
                         itemRenderer: (item, index) => {
                             const div = document.createElement('div');
                             div.className = 'aspect-square bg-gray-900 relative border border-gray-800 cursor-pointer overflow-hidden';
                             div.innerHTML = `<img data-src="${item.data}" class="w-full h-full object-cover opacity-0 transition-opacity duration-300" loading="lazy" alt="Foto galeri ${item.id}">`;
-                            div.onclick = () => this.previewController.openWithPhotos(item, this.currentPhotos);
+                            div.onclick = () => {
+                                if (this.previewController) {
+                                    this.previewController.openWithPhotos(item, this.currentPhotos);
+                                } else {
+                                    console.warn('Preview controller not initialized');
+                                }
+                            };
                             return div;
                         }
                     });
@@ -325,7 +361,13 @@ export class GalleryController {
                         const div = document.createElement('div');
                         div.className = 'aspect-square bg-gray-900 relative border border-gray-800 cursor-pointer overflow-hidden';
                         div.innerHTML = `<img data-src="${p.data}" class="w-full h-full object-cover opacity-0 transition-opacity duration-300" loading="lazy" alt="Foto galeri ${p.id}">`;
-                        div.onclick = () => this.previewController.openWithPhotos(p, this.currentPhotos);
+                        div.onclick = () => {
+                            if (this.previewController) {
+                                this.previewController.openWithPhotos(p, this.currentPhotos);
+                            } else {
+                                console.warn('Preview controller not initialized');
+                            }
+                        };
                         fragment.appendChild(div);
                     });
                     this.dom.galleryGrid.appendChild(fragment);

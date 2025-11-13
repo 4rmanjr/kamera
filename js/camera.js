@@ -166,6 +166,11 @@ export class CameraService {
                 }
             }, 150);
         }
+        
+        // Emit event untuk memberi tahu bahwa lokasi mungkin perlu diperbarui 
+        // sebelum pengambilan gambar untuk memastikan akurasi terkini digunakan
+        this.eventBus.emit('location:requestRefresh');
+        
         await this.canvasProcessorService.capture();
     }
 

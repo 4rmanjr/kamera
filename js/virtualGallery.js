@@ -51,7 +51,8 @@ export class VirtualGallery {
         this.content.appendChild(this.bottomSpacer);
         
         // Bind event listener
-        this.viewport.addEventListener('scroll', this.handleScroll.bind(this));
+        this.boundHandleScroll = this.handleScroll.bind(this);
+        this.viewport.addEventListener('scroll', this.boundHandleScroll);
         
         // Hitung grid layout
         this.calculateGrid();
@@ -206,8 +207,8 @@ export class VirtualGallery {
         if (this.imageObserver) {
             this.imageObserver.disconnect();
         }
-        if (this.viewport) {
-            this.viewport.removeEventListener('scroll', this.handleScroll);
+        if (this.viewport && this.boundHandleScroll) {
+            this.viewport.removeEventListener('scroll', this.boundHandleScroll);
         }
         if (this.container) {
             this.container.innerHTML = '';

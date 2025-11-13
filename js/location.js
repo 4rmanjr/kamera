@@ -26,6 +26,19 @@ export class LocationService {
         this.lastUpdateTime = 0;
         this.fastAcquisitionActive = true; // Mode akuisisi cepat aktif awalnya
         this.initialAcquisitionStartTime = 0;
+        
+        // Cache untuk hasil konsistensi lokasi terakhir
+        this.lastConsistencyCheck = {
+            positionHash: null,
+            result: false,
+            timestamp: 0
+        };
+        this.consistencyDebounceTime = 1000; // 1 detik, mencegah perhitungan berlebihan
+        
+        // Subscribe to location refresh requests
+        this.eventBus.subscribe('location:requestRefresh', () => {
+            this.handleLocationRefreshRequest();
+        });
     }
 
     init() {
@@ -98,6 +111,11 @@ export class LocationService {
 
         if (this.dom.lblGeo) {
             this.dom.lblGeo.innerHTML = `<i class="ph ph-warning text-red-400" aria-hidden="true"></i> ${errorMessage} (Tap untuk Ulang)`;
+            
+            // Clear any existing onclick handler to prevent memory leaks
+            this.dom.lblGeo.onclick = null;
+            
+            // Assign the new onclick handler
             this.dom.lblGeo.onclick = () => {
                 this.dom.lblGeo.innerHTML = `<i class="ph ph-spinner animate-spin mr-1" aria-hidden="true"></i> Mencari GPS...`;
                 this.init();
@@ -169,18 +187,26 @@ export class LocationService {
                 this.fastAcquisitionActive = false;
             }
 
-            // Mulai timer untuk menandai lokasi sebagai stabil setelah waktu tertentu
-            if (!this.locationTimer) {
-                this.locationTimer = setTimeout(() => {
-                    this.makeLocationStable();
-                }, this.BEST_LOCATION_TIMEOUT);
-            }
-
             // Cek apakah kita sudah mendapatkan lokasi yang cukup akurat
             if (this.bestLocation.acc <= this.MIN_ACCURACY) {
                 // Dalam mode akuisisi cepat, pertimbangkan untuk menstabilkan lebih awal
                 if (this.fastAcquisitionActive || this.isLocationConsistent()) {
                     this.makeLocationStable();
+                } else {
+                    // Reset timer jika lokasi akurat baru ditemukan agar kita selalu menggunakan data terbaru
+                    if (this.locationTimer) {
+                        clearTimeout(this.locationTimer);
+                    }
+                    this.locationTimer = setTimeout(() => {
+                        this.makeLocationStable();
+                    }, this.BEST_LOCATION_TIMEOUT);
+                }
+            } else {
+                // Jika belum akurat, tetap atur timer sebagai fallback
+                if (!this.locationTimer) {
+                    this.locationTimer = setTimeout(() => {
+                        this.makeLocationStable();
+                    }, this.BEST_LOCATION_TIMEOUT);
                 }
             }
         }
@@ -193,14 +219,19 @@ export class LocationService {
             return !currentBest; // Jika currentBest null, maka newLocation lebih baik
         }
 
-        // Validasi akurasi
-        if (!newLocation.acc || !currentBest.acc) {
-            return false; // Jika salah satu tidak memiliki akurasi, jangan ganti
+        // Validasi akurasi - harus berupa angka positif
+        if (!newLocation.acc || !currentBest.acc || 
+            typeof newLocation.acc !== 'number' || typeof currentBest.acc !== 'number' ||
+            newLocation.acc <= 0 || currentBest.acc <= 0) {
+            return false; // Jika salah satu tidak memiliki akurasi valid positif, jangan ganti
         }
 
         // Dalam mode akuisisi cepat, lebih responsif terhadap perbaikan akurasi
         const accuracyImprovement = currentBest.acc - newLocation.acc;
-        const accuracyRatio = currentBest.acc / (newLocation.acc || 1);
+        
+        // Calculate accuracy ratio with protection against division by zero
+        const accuracyRatio = (newLocation.acc && currentBest.acc) ? 
+                             currentBest.acc / newLocation.acc : 0;
 
         if (this.fastAcquisitionActive) {
             // Dalam mode cepat, lebih mudah menerima perbaikan
@@ -228,8 +259,22 @@ export class LocationService {
             return false; // Perlu cukup data untuk menilai konsistensi
         }
 
-        // Hitung rata-rata posisi dari beberapa pembacaan terakhir
+        // Cek apakah kita bisa menggunakan cache untuk menghindari perhitungan berulang
+        const now = Date.now();
         const recentPositions = this.positionHistory.slice(-5);
+        
+        // Buat hash dari posisi terbaru untuk menentukan apakah perlu menghitung ulang
+        const positionHash = recentPositions.map(pos => 
+            `${pos.lat.toFixed(6)},${pos.lng.toFixed(6)},${pos.acc}`
+        ).join('|');
+        
+        // Gunakan cache jika hasilnya masih fresh (kurang dari consistencyDebounceTime ms)
+        if (this.lastConsistencyCheck.positionHash === positionHash && 
+            (now - this.lastConsistencyCheck.timestamp) < this.consistencyDebounceTime) {
+            return this.lastConsistencyCheck.result;
+        }
+
+        // Hitung rata-rata posisi dari beberapa pembacaan terakhir
         const avgLat = recentPositions.reduce((sum, pos) => sum + pos.lat, 0) / recentPositions.length;
         const avgLng = recentPositions.reduce((sum, pos) => sum + pos.lng, 0) / recentPositions.length;
 
@@ -237,15 +282,23 @@ export class LocationService {
         let consistentCount = 0;
         const distanceThreshold = this.MOVEMENT_THRESHOLD / 111000; // Dalam derajat (111km per derajat)
 
+        // Gunakan approach yang lebih efisien untuk menghitung jarak dalam skala kecil
         for (const pos of recentPositions) {
-            const distance = this.calculateDistance(avgLat, avgLng, pos.lat, pos.lng);
+            const distance = this.calculateDistanceFast(avgLat, avgLng, pos.lat, pos.lng);
             if (distance < distanceThreshold) {
                 consistentCount++;
             }
         }
 
+        // Simpan hasil ke cache
+        this.lastConsistencyCheck = {
+            positionHash,
+            result: consistentCount >= 3,
+            timestamp: now
+        };
+
         // Jika sebagian besar pembacaan konsisten, anggap lokasi stabil
-        return consistentCount >= 3;
+        return this.lastConsistencyCheck.result;
     }
 
     // Fungsi untuk menghitung jarak antara dua titik (dalam km)
@@ -268,6 +321,30 @@ export class LocationService {
 
     toRadians(degrees) {
         return degrees * Math.PI / 180;
+    }
+
+    // Fungsi untuk menghitung jarak antara dua titik secara cepat untuk jarak pendek
+    // Menggunakan pendekatan equirectangular projection yang lebih cepat untuk jarak kecil
+    calculateDistanceFast(lat1, lng1, lat2, lng2) {
+        // Validasi input
+        if (isNaN(lat1) || isNaN(lng1) || isNaN(lat2) || isNaN(lng2)) {
+            return Infinity; // Jika input tidak valid, kembalikan jarak tak terhingga
+        }
+
+        const R = 6371; // Radius bumi dalam km
+        const lat1Rad = this.toRadians(lat1);
+        const lat2Rad = this.toRadians(lat2);
+        const avgLat = (lat1Rad + lat2Rad) / 2;
+        
+        // Konversi perbedaan koordinat ke radian
+        const dLat = this.toRadians(lat2 - lat1);
+        const dLng = this.toRadians(lng2 - lng1);
+        
+        // Equirectangular projection - lebih cepat daripada Haversine untuk jarak kecil
+        const x = dLng * Math.cos(avgLat);
+        const distance = R * Math.sqrt(x * x + dLat * dLat);
+        
+        return Math.abs(distance); // Jarak dalam km
     }
 
     makeLocationStable() {
@@ -379,6 +456,28 @@ export class LocationService {
 
         if (this.dom.lblGeo) {
             this.dom.lblGeo.innerHTML = `${stabilityIndicator} ${lat}, ${lng} (±${acc}m)`;
+        }
+    }
+    
+    /**
+     * Handle location refresh request by updating state with latest available location
+     */
+    handleLocationRefreshRequest() {
+        // If we have a best location (either stable or best known), update the state
+        if (this.bestLocation) {
+            // Update the state with the most recent best location
+            this.state.location = {
+                lat: typeof this.bestLocation.lat === 'number' ? this.bestLocation.lat.toFixed(6) : this.state.location.lat,
+                lng: typeof this.bestLocation.lng === 'number' ? this.bestLocation.lng.toFixed(6) : this.state.location.lng,
+                acc: typeof this.bestLocation.acc === 'number' ? this.bestLocation.acc : this.state.location.acc,
+                altitude: this.bestLocation.altitude,
+                altitudeAccuracy: this.bestLocation.altitudeAccuracy,
+                speed: this.bestLocation.speed,
+                heading: this.bestLocation.heading
+            };
+
+            // Update the display with the current best location
+            this.updateLocationDisplay(this.bestLocation);
         }
     }
     
