@@ -35,10 +35,35 @@ export class CameraService {
                 // Restore the zoom level after capabilities are checked
                 await this.setZoom(this.state.zoomLevel);
             }, 500);
-        } catch (err) {
-            console.error(err);
+            
+            // Clear any existing error messages when camera starts successfully
             if (this.dom.lblGeo) {
-                this.dom.lblGeo.innerHTML = `<i class="ph ph-warning text-red-400" aria-hidden="true"></i> Error: Kamera Ditolak`;
+                this.dom.lblGeo.innerHTML = `<i class="ph ph-map-pin text-blue-400" aria-hidden="true"></i> Menyiapkan Kamera...`;
+            }
+        } catch (err) {
+            console.error('Camera error:', err);
+            
+            // Provide more specific error messages based on error type
+            let errorMessage = "Error: Kamera Ditolak";
+            if (err.name === 'NotAllowedError') {
+                errorMessage = "Izin kamera ditolak";
+            } else if (err.name === 'NotFoundError') {
+                errorMessage = "Kamera tidak ditemukan";
+            } else if (err.name === 'NotReadableError') {
+                errorMessage = "Kamera sedang digunakan oleh aplikasi lain";
+            } else if (err.name === 'OverconstrainedError') {
+                errorMessage = "Kamera tidak mendukung konfigurasi yang diminta";
+            } else if (err.name === 'SecurityError' || err.name === 'TypeError') {
+                errorMessage = "Tidak dapat mengakses kamera";
+            }
+            
+            if (this.dom.lblGeo) {
+                this.dom.lblGeo.innerHTML = `<i class="ph ph-warning text-red-400" aria-hidden="true"></i> ${errorMessage}`;
+            }
+            
+            // If notification service is available, show notification
+            if (this.notificationService) {
+                this.notificationService.show(errorMessage, 'error', 3000);
             }
         }
     }

@@ -158,26 +158,30 @@ export class LocationService {
         }
 
         // Update best location jika diperlukan
-        if (!this.bestLocation || this.isBetterLocation(currentLocation, this.bestLocation)) {
+        const isNewBestLocation = !this.bestLocation || this.isBetterLocation(currentLocation, this.bestLocation);
+        if (isNewBestLocation) {
             this.bestLocation = currentLocation;
         }
 
-        // Update tampilan UI dengan debounce
-        const now = Date.now();
-        if (now - this.lastUpdateTime > this.UPDATE_DEBOUNCE) {
-            this.updateLocationDisplay(this.bestLocation);
-            this.lastUpdateTime = now;
-        } else {
-            // Gunakan timer untuk update nanti jika belum waktunya
-            if (this.updateDebounceTimer) {
-                clearTimeout(this.updateDebounceTimer);
-            }
-
-            // Bind context sehingga 'this' tetap merujuk ke instance class di dalam fungsi setTimeout
-            this.updateDebounceTimer = setTimeout(() => {
+        // Update tampilan UI hanya jika ini adalah best location baru dan kita dalam mode tidak stabil
+        if (isNewBestLocation || !this.isLocationStable) {
+            const now = Date.now();
+            if (now - this.lastUpdateTime > this.UPDATE_DEBOUNCE) {
                 this.updateLocationDisplay(this.bestLocation);
-                this.lastUpdateTime = Date.now();
-            }, this.UPDATE_DEBOUNCE);
+                this.lastUpdateTime = now;
+            } else {
+                // Gunakan timer untuk update nanti jika belum waktunya
+                // Hanya clear timer jika benar-benar ada
+                if (this.updateDebounceTimer !== null && this.updateDebounceTimer !== undefined) {
+                    clearTimeout(this.updateDebounceTimer);
+                }
+
+                // Bind context sehingga 'this' tetap merujuk ke instance class di dalam fungsi setTimeout
+                this.updateDebounceTimer = setTimeout(() => {
+                    this.updateLocationDisplay(this.bestLocation);
+                    this.lastUpdateTime = Date.now();
+                }, this.UPDATE_DEBOUNCE);
+            }
         }
 
         // Cek apakah lokasi sudah cukup stabil atau akurat
@@ -194,7 +198,7 @@ export class LocationService {
                     this.makeLocationStable();
                 } else {
                     // Reset timer jika lokasi akurat baru ditemukan agar kita selalu menggunakan data terbaru
-                    if (this.locationTimer) {
+                    if (this.locationTimer !== null && this.locationTimer !== undefined) {
                         clearTimeout(this.locationTimer);
                     }
                     this.locationTimer = setTimeout(() => {
@@ -202,8 +206,8 @@ export class LocationService {
                     }, this.BEST_LOCATION_TIMEOUT);
                 }
             } else {
-                // Jika belum akurat, tetap atur timer sebagai fallback
-                if (!this.locationTimer) {
+                // Jika belum akurat, tetap atur timer sebagai fallback jika belum ada
+                if (this.locationTimer === null || this.locationTimer === undefined) {
                     this.locationTimer = setTimeout(() => {
                         this.makeLocationStable();
                     }, this.BEST_LOCATION_TIMEOUT);
@@ -214,24 +218,32 @@ export class LocationService {
 
     // Fungsi untuk menentukan apakah lokasi baru lebih baik dari yang sekarang
     isBetterLocation(newLocation, currentBest) {
-        // Validasi bahwa kedua lokasi valid
+        // Validasi awal yang cepat
         if (!newLocation || !currentBest) {
             return !currentBest; // Jika currentBest null, maka newLocation lebih baik
         }
 
+        // Ambil nilai akurasi untuk penggunaan berulang
+        const newAcc = newLocation.acc;
+        const currentAcc = currentBest.acc;
+
         // Validasi akurasi - harus berupa angka positif
-        if (!newLocation.acc || !currentBest.acc || 
-            typeof newLocation.acc !== 'number' || typeof currentBest.acc !== 'number' ||
-            newLocation.acc <= 0 || currentBest.acc <= 0) {
+        if (!newAcc || !currentAcc || 
+            typeof newAcc !== 'number' || typeof currentAcc !== 'number' ||
+            newAcc <= 0 || currentAcc <= 0) {
             return false; // Jika salah satu tidak memiliki akurasi valid positif, jangan ganti
         }
 
+        // Periksa apakah akurasi baru lebih baik sebelum melakukan perhitungan kompleks
+        if (newAcc >= currentAcc) {
+            return false; // Jika akurasi baru tidak lebih baik, langsung kembalikan false
+        }
+
         // Dalam mode akuisisi cepat, lebih responsif terhadap perbaikan akurasi
-        const accuracyImprovement = currentBest.acc - newLocation.acc;
+        const accuracyImprovement = currentAcc - newAcc;
         
-        // Calculate accuracy ratio with protection against division by zero
-        const accuracyRatio = (newLocation.acc && currentBest.acc) ? 
-                             currentBest.acc / newLocation.acc : 0;
+        // Calculate accuracy ratio dengan perlindungan terhadap pembagian dengan nol
+        const accuracyRatio = newAcc > 0 ? currentAcc / newAcc : 0;
 
         if (this.fastAcquisitionActive) {
             // Dalam mode cepat, lebih mudah menerima perbaikan
@@ -247,7 +259,7 @@ export class LocationService {
 
         // Jika akurasinya serupa, pilih yang punya akurasi lebih baik
         if (Math.abs(accuracyImprovement) < 10) {
-            return newLocation.acc < currentBest.acc;
+            return true; // Karena kita sudah tahu newAcc < currentAcc dari awal
         }
 
         return false;
@@ -264,8 +276,9 @@ export class LocationService {
         const recentPositions = this.positionHistory.slice(-5);
         
         // Buat hash dari posisi terbaru untuk menentukan apakah perlu menghitung ulang
+        // Gunakan presisi lebih tinggi untuk deteksi perubahan kecil
         const positionHash = recentPositions.map(pos => 
-            `${pos.lat.toFixed(6)},${pos.lng.toFixed(6)},${pos.acc}`
+            `${pos.lat.toFixed(10)},${pos.lng.toFixed(10)},${pos.acc}`
         ).join('|');
         
         // Gunakan cache jika hasilnya masih fresh (kurang dari consistencyDebounceTime ms)
@@ -282,11 +295,26 @@ export class LocationService {
         let consistentCount = 0;
         const distanceThreshold = this.MOVEMENT_THRESHOLD / 111000; // Dalam derajat (111km per derajat)
 
-        // Gunakan approach yang lebih efisien untuk menghitung jarak dalam skala kecil
+        // Gunakan aproach yang lebih efisien untuk menghitung jarak dalam skala kecil
+        // Lakukan early exit jika sudah ditemukan cukup banyak posisi yang tidak konsisten
+        const requiredConsistent = 3; // Jumlah minimum yang diperlukan untuk konsistensi
+        const maxInconsistent = recentPositions.length - requiredConsistent; // Jumlah maksimum yang bisa tidak konsisten
+        let inconsistentCount = 0;
+
         for (const pos of recentPositions) {
             const distance = this.calculateDistanceFast(avgLat, avgLng, pos.lat, pos.lng);
             if (distance < distanceThreshold) {
                 consistentCount++;
+                // Jika sudah mencapai jumlah yang dibutuhkan, hentikan perhitungan
+                if (consistentCount >= requiredConsistent) {
+                    break;
+                }
+            } else {
+                inconsistentCount++;
+                // Jika sudah terlalu banyak yang tidak konsisten, hentikan perhitungan
+                if (inconsistentCount > maxInconsistent) {
+                    break;
+                }
             }
         }
 
@@ -329,6 +357,16 @@ export class LocationService {
         // Validasi input
         if (isNaN(lat1) || isNaN(lng1) || isNaN(lat2) || isNaN(lng2)) {
             return Infinity; // Jika input tidak valid, kembalikan jarak tak terhingga
+        }
+
+        // Periksa apakah ini benar-benar jarak pendek sebelum menggunakan metode cepat
+        // Jika perbedaan koordinat besar, kembali ke perhitungan yang lebih akurat
+        const latDiff = Math.abs(lat2 - lat1);
+        const lngDiff = Math.abs(lng2 - lng1);
+        
+        // Jika perbedaan lebih dari 0.1 derajat (sekitar 11km), gunakan metode yang lebih akurat
+        if (latDiff > 0.1 || lngDiff > 0.1) {
+            return this.calculateDistance(lat1, lng1, lat2, lng2);
         }
 
         const R = 6371; // Radius bumi dalam km
@@ -393,24 +431,45 @@ export class LocationService {
         }
 
         // Ambil beberapa pembacaan terbaik berdasarkan akurasi
-        const bestPositions = [...this.positionHistory]
+        // Gunakan pendekatan yang lebih efisien daripada full sort: partial selection
+        const maxPositions = Math.min(7, this.positionHistory.length);
+        const bestPositions = this.positionHistory
+            .slice() // Buat salinan array agar tidak mengubah aslinya
             .sort((a, b) => a.acc - b.acc)  // Urutkan berdasarkan akurasi
-            .slice(0, Math.min(7, this.positionHistory.length));  // Ambil 7 terbaik (lebih dari sebelumnya)
+            .slice(0, maxPositions);  // Ambil sejumlah terbaik
+
+        // Validasi bahwa kita punya posisi valid untuk diproses
+        if (bestPositions.length === 0) {
+            return this.bestLocation || {
+                lat: 0,
+                lng: 0,
+                acc: 0,
+                altitude: null,
+                altitudeAccuracy: null,
+                speed: null,
+                heading: null,
+                timestamp: Date.now()
+            };
+        }
 
         // Hitung rata-rata tertimbang berdasarkan akurasi
         let totalLat = 0, totalLng = 0, totalAcc = 0;
         let weightSum = 0;
 
-        for (const pos of bestPositions) {
-            const weight = 1 / (pos.acc || 1); // Bobot berdasarkan akurasi (akurasi lebih baik = bobot lebih tinggi)
-            totalLat += pos.lat * weight;
-            totalLng += pos.lng * weight;
-            totalAcc += pos.acc * weight;
-            weightSum += weight;
+        for (let i = 0; i < bestPositions.length; i++) {
+            const pos = bestPositions[i];
+            // Validasi bahwa posisi ini memiliki akurasi yang valid
+            if (typeof pos.acc === 'number' && pos.acc > 0) {
+                const weight = 1 / pos.acc; // Bobot berdasarkan akurasi (akurasi lebih baik = bobot lebih tinggi)
+                totalLat += pos.lat * weight;
+                totalLng += pos.lng * weight;
+                totalAcc += pos.acc * weight;
+                weightSum += weight;
+            }
         }
 
         if (weightSum > 0) {
-            return {
+            const result = {
                 lat: totalLat / weightSum,
                 lng: totalLng / weightSum,
                 acc: Math.round(totalAcc / weightSum),
@@ -420,9 +479,40 @@ export class LocationService {
                 heading: bestPositions[0].heading,
                 timestamp: bestPositions[0].timestamp
             };
+            
+            // Validasi hasil akhir untuk memastikan semuanya valid
+            if (isNaN(result.lat) || isNaN(result.lng) || isNaN(result.acc)) {
+                console.warn("calculateRefinedLocation menghasilkan nilai tidak valid, menggunakan bestLocation sebagai fallback", {
+                    originalBestPositions: bestPositions,
+                    calculatedResult: result
+                });
+                return this.bestLocation || {
+                    lat: 0,
+                    lng: 0,
+                    acc: 0,
+                    altitude: null,
+                    altitudeAccuracy: null,
+                    speed: null,
+                    heading: null,
+                    timestamp: Date.now()
+                };
+            }
+            
+            return result;
         } else {
-            // Jika weightSum adalah 0, kembalikan bestLocation untuk mencegah NaN
-            return this.bestLocation || {
+            // Jika weightSum adalah 0 karena semua posisi memiliki akurasi tak valid
+            // kembalikan bestLocation atau posisi terbaik berdasarkan akurasi
+            const bestByAccuracy = this.positionHistory.reduce((best, current) => 
+                (current.acc > 0 && (!best || current.acc < best.acc)) ? current : best, null);
+                
+            if (!bestByAccuracy) {
+                console.warn("calculateRefinedLocation tidak menemukan posisi valid, menggunakan bestLocation atau default", {
+                    positionHistory: this.positionHistory,
+                    bestLocation: this.bestLocation
+                });
+            }
+            
+            return bestByAccuracy || this.bestLocation || {
                 lat: 0,
                 lng: 0,
                 acc: 0,
@@ -450,9 +540,14 @@ export class LocationService {
             '<i class="ph ph-map-pin text-blue-400" aria-hidden="true"></i>';
 
         // Pastikan location.lat dan location.lng adalah angka sebelum memformat
-        const lat = typeof location.lat === 'number' ? location.lat.toFixed(6) : '0.000000';
-        const lng = typeof location.lng === 'number' ? location.lng.toFixed(6) : '0.000000';
-        const acc = typeof location.acc === 'number' ? location.acc : 0;
+        // Konversi dari string ke angka jika perlu
+        const latValue = typeof location.lat === 'string' ? parseFloat(location.lat) : location.lat;
+        const lngValue = typeof location.lng === 'string' ? parseFloat(location.lng) : location.lng;
+        const accValue = typeof location.acc === 'string' ? parseFloat(location.acc) : location.acc;
+
+        const lat = typeof latValue === 'number' && !isNaN(latValue) ? latValue.toFixed(6) : '0.000000';
+        const lng = typeof lngValue === 'number' && !isNaN(lngValue) ? lngValue.toFixed(6) : '0.000000';
+        const acc = typeof accValue === 'number' && !isNaN(accValue) ? Math.round(accValue) : 0;
 
         if (this.dom.lblGeo) {
             this.dom.lblGeo.innerHTML = `${stabilityIndicator} ${lat}, ${lng} (±${acc}m)`;
@@ -466,10 +561,11 @@ export class LocationService {
         // If we have a best location (either stable or best known), update the state
         if (this.bestLocation) {
             // Update the state with the most recent best location
+            // Ensure consistency by using the same format for all location data
             this.state.location = {
-                lat: typeof this.bestLocation.lat === 'number' ? this.bestLocation.lat.toFixed(6) : this.state.location.lat,
-                lng: typeof this.bestLocation.lng === 'number' ? this.bestLocation.lng.toFixed(6) : this.state.location.lng,
-                acc: typeof this.bestLocation.acc === 'number' ? this.bestLocation.acc : this.state.location.acc,
+                lat: this.bestLocation.lat,
+                lng: this.bestLocation.lng,
+                acc: this.bestLocation.acc,
                 altitude: this.bestLocation.altitude,
                 altitudeAccuracy: this.bestLocation.altitudeAccuracy,
                 speed: this.bestLocation.speed,
