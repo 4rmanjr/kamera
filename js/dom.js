@@ -29,7 +29,8 @@ export const DOM = {
     previewLogo: null,
     txtNoLogo: null,
     galleryGrid: null,
-    imgPreview: null
+    imgPreview: null,
+    lblCameraStatus: null
 };
 
 // Function to initialize DOM elements after the page has loaded
@@ -58,4 +59,5 @@ export function initDOM() {
     DOM.txtNoLogo = document.getElementById('txt-no-logo');
     DOM.galleryGrid = document.getElementById('gallery-grid');
     DOM.imgPreview = document.getElementById('img-preview');
+    DOM.lblCameraStatus = document.getElementById('lbl-camera-status');
 }

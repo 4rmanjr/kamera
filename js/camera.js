@@ -36,9 +36,17 @@ export class CameraService {
                 await this.setZoom(this.state.zoomLevel);
             }, 500);
             
-            // Clear any existing error messages when camera starts successfully
-            if (this.dom.lblGeo) {
-                this.dom.lblGeo.innerHTML = `<i class="ph ph-map-pin text-blue-400" aria-hidden="true"></i> Menyiapkan Kamera...`;
+            // Show camera status when camera starts successfully
+            if (this.dom.lblCameraStatus) {
+                this.dom.lblCameraStatus.innerHTML = `<i class="ph ph-camera text-blue-400 mr-1" aria-hidden="true"></i> Menyiapkan Kamera...`;
+                this.dom.lblCameraStatus.classList.remove('hidden');
+
+                // Hide the status after 3 seconds
+                setTimeout(() => {
+                    if (this.dom.lblCameraStatus) {
+                        this.dom.lblCameraStatus.classList.add('hidden');
+                    }
+                }, 3000);
             }
         } catch (err) {
             console.error('Camera error:', err);
@@ -57,8 +65,16 @@ export class CameraService {
                 errorMessage = "Tidak dapat mengakses kamera";
             }
             
-            if (this.dom.lblGeo) {
-                this.dom.lblGeo.innerHTML = `<i class="ph ph-warning text-red-400" aria-hidden="true"></i> ${errorMessage}`;
+            if (this.dom.lblCameraStatus) {
+                this.dom.lblCameraStatus.innerHTML = `<i class="ph ph-warning text-red-400 mr-1" aria-hidden="true"></i> ${errorMessage}`;
+                this.dom.lblCameraStatus.classList.remove('hidden');
+
+                // Hide the error status after 5 seconds
+                setTimeout(() => {
+                    if (this.dom.lblCameraStatus) {
+                        this.dom.lblCameraStatus.classList.add('hidden');
+                    }
+                }, 5000);
             }
             
             // If notification service is available, show notification
