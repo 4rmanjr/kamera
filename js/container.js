@@ -96,7 +96,7 @@ export class DIContainer {
         
         // Set referensi yang dibutuhkan setelah semua instance dibuat
         galleryController.setPreviewController(previewController);
-        
+
         // Simpan semua instance di container
         this.services.set('storageService', storageService);
         this.services.set('cameraService', cameraService);
@@ -107,7 +107,7 @@ export class DIContainer {
         this.services.set('uiController', uiController);
         this.services.set('qrCodeGenerator', qrCodeGenerator);
         this.services.set('notificationService', notificationService);
-        
+
         return {
             storageService,
             cameraService,
@@ -123,6 +123,10 @@ export class DIContainer {
     
     get(serviceName) {
         return this.services.get(serviceName);
+    }
+
+    getServices() {
+        return Object.fromEntries(this.services);
     }
 }
 

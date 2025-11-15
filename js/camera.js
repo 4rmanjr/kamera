@@ -239,6 +239,23 @@ export class CameraService {
     }
 
     /**
+     * Pause camera (stop the stream but keep settings)
+     */
+    pause() {
+        if (this.state.stream) {
+            this.state.stream.getTracks().forEach(track => track.stop());
+            this.state.stream = null;
+        }
+    }
+
+    /**
+     * Check if camera service is active
+     */
+    isActive() {
+        return !!(this.state.stream && this.state.stream.active);
+    }
+
+    /**
      * Cleanup camera resources
      */
     destroy() {

@@ -35,3 +35,46 @@ window.onload = async () => {
         }
     }
 };
+
+// Cleanup resources when page is unloaded
+window.addEventListener('beforeunload', () => {
+    try {
+        const services = container.getServices();
+        if (services.canvasProcessorService && typeof services.canvasProcessorService.destroy === 'function') {
+            services.canvasProcessorService.destroy();
+        }
+        if (services.cameraService && typeof services.cameraService.destroy === 'function') {
+            services.cameraService.destroy();
+        }
+        if (services.locationService && typeof services.locationService.destroy === 'function') {
+            services.locationService.destroy();
+        }
+    } catch (err) {
+        console.error("Gagal membersihkan sumber daya:", err);
+    }
+});
+
+// Handle app visibility changes for better resource management
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+        // Pause non-critical operations when app is not visible
+        const services = container.getServices();
+        if (services.locationService && typeof services.locationService.pause === 'function') {
+            services.locationService.pause();
+        }
+        // Pause camera when app is not visible to save resources
+        if (services.cameraService && typeof services.cameraService.pause === 'function') {
+            services.cameraService.pause();
+        }
+    } else if (document.visibilityState === 'visible') {
+        // Resume operations when app becomes visible
+        const services = container.getServices();
+        if (services.locationService && typeof services.locationService.resume === 'function') {
+            services.locationService.resume();
+        }
+        // Restart camera when app becomes visible
+        if (services.cameraService && typeof services.cameraService.start === 'function') {
+            services.cameraService.start();
+        }
+    }
+});

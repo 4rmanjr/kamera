@@ -578,6 +578,42 @@ export class LocationService {
     }
     
     /**
+     * Pause location tracking
+     */
+    pause() {
+        if (this.state.watchId) {
+            navigator.geolocation.clearWatch(this.state.watchId);
+            this.state.watchId = null;
+        }
+        // Clear any existing timers
+        if (this.locationTimer) {
+            clearTimeout(this.locationTimer);
+            this.locationTimer = null;
+        }
+
+        if (this.updateDebounceTimer) {
+            clearTimeout(this.updateDebounceTimer);
+            this.updateDebounceTimer = null;
+        }
+    }
+
+    /**
+     * Resume location tracking
+     */
+    resume() {
+        if (!this.state.watchId) {
+            this.init();
+        }
+    }
+
+    /**
+     * Check if location service is active
+     */
+    isActive() {
+        return !!this.state.watchId;
+    }
+
+    /**
      * Cleanup location service resources
      */
     destroy() {
@@ -586,18 +622,18 @@ export class LocationService {
             navigator.geolocation.clearWatch(this.state.watchId);
             this.state.watchId = null;
         }
-        
+
         // Clear any existing timers
         if (this.locationTimer) {
             clearTimeout(this.locationTimer);
             this.locationTimer = null;
         }
-        
+
         if (this.updateDebounceTimer) {
             clearTimeout(this.updateDebounceTimer);
             this.updateDebounceTimer = null;
         }
-        
+
         // Reset internal state
         this.resetLocationStatus();
     }

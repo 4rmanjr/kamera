@@ -12,43 +12,112 @@ export class CanvasProcessorService {
         // Batas maksimum dimensi canvas untuk optimasi
         this.maxCanvasWidth = 1920;
         this.maxCanvasHeight = 1080;
+
+        // Inisialisasi Web Worker untuk operasi berat
+        this.worker = null;
+        this.initWorker();
+
+        // Queue untuk menangani multiple capture request
+        this.captureQueue = [];
+        this.isProcessing = false;
     }
 
-    async capture() {
-        const vid = this.dom.video;
-        const cvs = this.dom.canvas;
-        
-        // Check if required DOM elements exist
-        if (!vid || !cvs) {
-            console.error('Video or canvas element not found for capture');
-            return;
+    initWorker() {
+        try {
+            // Membuat Web Worker dari file eksternal untuk pemrosesan canvas
+            this.worker = new Worker('js/worker/canvas-worker.js');
+
+            // Handle messages dari worker
+            this.worker.onmessage = (e) => {
+                const { operation, bitmap, data, location, settings, dimensions, logo, qrCodeImage } = e.data;
+
+                switch(operation) {
+                    case 'resultBitmap':
+                        // Resolve promise yang menunggu hasil dari worker
+                        if (this.pendingWorkerRequests.length > 0) {
+                            const resolve = this.pendingWorkerRequests.shift();
+                            resolve({ bitmap });
+                        }
+                        break;
+
+                    case 'requestQRCode':
+                        // Worker meminta QR code dari main thread
+                        this.generateQRCodeForWorker(location, settings, dimensions);
+                        break;
+
+                    case 'requestLogo':
+                        // Worker meminta logo dari main thread
+                        this.addLogoForWorker(logo, settings, dimensions);
+                        break;
+
+                    case 'qrCodeReadyHandled':
+                        // Worker sudah menerima QR code, sekarang kita tambahkan ke canvas
+                        this.handleQRCodeFromWorker(qrCodeImage, settings, dimensions);
+                        break;
+
+                    case 'logoReady':
+                        // Worker sudah menerima logo
+                        this.handleLogoFromWorker(logo, settings, dimensions);
+                        break;
+
+                    case 'fallbackToMainThread':
+                        // Worker meminta fallback ke main thread
+                        if (this.pendingWorkerRequests.length > 0) {
+                            const resolve = this.pendingWorkerRequests.shift();
+                            resolve({ useFallback: true });
+                        }
+                        break;
+
+                    case 'error':
+                        console.error('Worker error:', data.error);
+                        if (this.pendingWorkerRequests.length > 0) {
+                            const resolve = this.pendingWorkerRequests.shift();
+                            resolve({ error: data.error });
+                        }
+                        break;
+                }
+            };
+
+            // Handle any worker errors
+            this.worker.onerror = (error) => {
+                console.error('Worker initialization or runtime error:', error);
+                // If worker fails completely, we should ensure fallback capture always works
+                // In this case, we don't need to do anything special since we already
+                // have fallback code, but log the error for debugging
+            };
+        } catch (error) {
+            console.error('Failed to initialize Web Worker:', error);
+            // If Web Worker initialization fails completely, set worker to null
+            // This will cause the code to use the fallback method directly
+            this.worker = null;
         }
-        
-        const ctx = cvs.getContext('2d');
+
+        // Array untuk menyimpan promise yang menunggu hasil dari worker
+        this.pendingWorkerRequests = [];
+    }
+
+    /**
+     * Mengirim data ke worker dan menunggu hasilnya
+     */
+    sendToWorker(message) {
+        return new Promise((resolve) => {
+            this.pendingWorkerRequests.push(resolve);
+            this.worker.postMessage(message);
+        });
+    }
+
+    /**
+     * Fallback ke pemrosesan di main thread jika worker tidak mendukung OffscreenCanvas
+     */
+    async fallbackCapture(canvas, vid, canvasWidth, canvasHeight) {
+        const ctx = canvas.getContext('2d');
         if (!ctx) {
             console.error('Unable to get canvas context for capture');
             return;
         }
 
-        // Optimasi ukuran canvas untuk kinerja
-        let canvasWidth = vid.videoWidth;
-        let canvasHeight = vid.videoHeight;
-
-        // Batasi ukuran maksimum canvas untuk kinerja
-        if (canvasWidth > this.maxCanvasWidth) {
-            const ratio = this.maxCanvasWidth / canvasWidth;
-            canvasWidth = this.maxCanvasWidth;
-            canvasHeight = canvasHeight * ratio;
-        }
-
-        if (canvasHeight > this.maxCanvasHeight) {
-            const ratio = this.maxCanvasHeight / canvasHeight;
-            canvasHeight = this.maxCanvasHeight;
-            canvasWidth = canvasWidth * ratio;
-        }
-
-        cvs.width = canvasWidth;
-        cvs.height = canvasHeight;
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
 
         // Gambar video ke canvas dengan transformasi
         ctx.save();
@@ -82,8 +151,8 @@ export class CanvasProcessorService {
         let locStr;
         const lat = parseFloat(this.state.location.lat);
         const lng = parseFloat(this.state.location.lng);
-        
-        if (!isNaN(lat) && !isNaN(lng) && 
+
+        if (!isNaN(lat) && !isNaN(lng) &&
             (lat !== 0 || lng !== 0)) {
             // Jika heading tersedia, sertakan dalam informasi
             if (this.state.location.heading !== null && this.state.location.heading !== undefined) {
@@ -172,82 +241,479 @@ export class CanvasProcessorService {
             await this.addQRCodeToCanvas(ctx, canvasWidth, canvasHeight);
         }
 
-        // Kita perlu akses ke storage service, jadi kita emit event
-        this.eventBus.emit('canvas:captureComplete', cvs.toDataURL('image/jpeg', 0.90));
+        // Emit hasil dasar ke UI - beri feedback segera ke pengguna
+        // Kompresi lebih cepat untuk kecepatan respons
+        const basicDataUrl = canvas.toDataURL('image/jpeg', 0.70);
+        this.eventBus.emit('canvas:basicReady', basicDataUrl);
+
+        // Tambahkan QR code secara lazy jika diaktifkan
+        if (this.state.settings.qrCodeEnabled && this.qrCodeGenerator) {
+            setTimeout(async () => {
+                try {
+                    console.log('Adding QR code to canvas (fallback lazy), location:', this.state.location);
+                    const ctx = canvas.getContext('2d');
+                    await this.addQRCodeToCanvas(ctx, canvasWidth, canvasHeight);
+
+                    // Simpan hasil akhir dengan kualitas penuh setelah QR code selesai
+                    const finalDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                    this.eventBus.emit('canvas:captureComplete', finalDataUrl);
+                } catch (error) {
+                    console.error('Error adding QR code, sending basic image instead:', error);
+                    // Jika error saat menambahkan QR code, kirim data basic saja
+                    this.eventBus.emit('canvas:captureComplete', basicDataUrl);
+                }
+            }, 0);
+        } else {
+            // Jika tidak ada QR code, kirim hasil akhir sekarang
+            this.eventBus.emit('canvas:captureComplete', basicDataUrl);
+        }
     }
 
     /**
-     * Menambahkan QR code ke canvas
+     * Generate QR code untuk worker dan kirimkan kembali
      */
-    async addQRCodeToCanvas(ctx, canvasWidth, canvasHeight) {
-        try {
-            // Generate URL untuk QR code
-            const lat = parseFloat(this.state.location.lat);
-            const lng = parseFloat(this.state.location.lng);
-            
-            if (isNaN(lat) || isNaN(lng)) {
-                console.warn('Invalid location coordinates for QR code generation');
-                return;
+    async generateQRCodeForWorker(location, settings, dimensions) {
+        if (!this.qrCodeGenerator) return;
+
+        const qrCodeImage = await this.qrCodeGenerator.generateLocationQRCode(location);
+        if (!qrCodeImage) return;
+
+        // Kirim QR code kembali ke worker
+        this.worker.postMessage({
+            operation: 'qrCodeReady',
+            qrCodeImage,
+            settings,
+            dimensions
+        });
+    }
+
+    /**
+     * Tambahkan logo untuk worker
+     */
+    addLogoForWorker(logo, settings, dimensions) {
+        // Kirim instruksi ke worker untuk menggambar logo
+        this.worker.postMessage({
+            operation: 'drawLogo',
+            logo,
+            settings,
+            dimensions
+        });
+    }
+
+    /**
+     * Handle QR code yang dikirim dari worker
+     */
+    async handleQRCodeFromWorker(qrCodeImage, settings, dimensions) {
+        // Karena kita tidak bisa menggambar langsung dari worker ke canvas,
+        // kita simpan informasi ini dan gambarkan saat kita menerima hasil akhir
+        this.pendingQRCode = { qrCodeImage, settings, dimensions };
+    }
+
+    /**
+     * Handle logo yang dikirim dari worker
+     */
+    handleLogoFromWorker(logo, settings, dimensions) {
+        // Simpan informasi logo untuk digambar nanti
+        this.pendingLogo = { logo, settings, dimensions };
+    }
+
+    /**
+     * Gambarkan logo yang tertunda ke canvas
+     */
+    async drawPendingLogo(ctx, pendingLogo, canvasWidth, canvasHeight) {
+        if (!pendingLogo || !pendingLogo.logo) return;
+
+        // Implementasi penggambaran logo ke canvas
+        const { logo, settings, dimensions } = pendingLogo;
+        const { width, height } = dimensions;
+
+        // Hitung dimensi logo
+        let logoW = width * 0.20;
+        let logoH = logoW / (logo.width / logo.height);
+
+        // Tentukan posisi berdasarkan pengaturan
+        const margin = 20; // Sesuaikan dengan margin teks
+        const posCoords = {
+            tl: { x: margin, y: margin },
+            tr: { x: width - margin - logoW, y: margin },
+            bl: { x: margin, y: height - margin - logoH },
+            br: { x: width - margin - logoW, y: height - margin - logoH }
+        };
+
+        const lPos = { ...posCoords[settings.logoPos] };
+
+        // Buat dan gambar logo
+        const img = new Image();
+        img.src = logo.url;
+
+        await new Promise((resolve) => {
+            img.onload = () => {
+                ctx.drawImage(img, lPos.x, lPos.y, logoW, logoH);
+                resolve();
+            };
+            img.onerror = () => resolve(); // Lanjutkan meskipun error
+        });
+    }
+
+    /**
+     * Gambarkan QR code yang tertunda ke canvas
+     */
+    async drawPendingQRCode(ctx, pendingQRCode, canvasWidth, canvasHeight) {
+        if (!pendingQRCode || !pendingQRCode.qrCodeImage) return;
+
+        // Ambil informasi dari pending QR code
+        const { qrCodeImage, settings, dimensions } = pendingQRCode;
+        const { width, height } = dimensions;
+
+        // Load gambar QR code ke canvas
+        const img = new Image();
+        img.src = qrCodeImage;
+
+        await new Promise((resolve) => {
+            img.onload = () => {
+                // Hitung ukuran QR code berdasarkan pengaturan
+                const baseSize = Math.max(120, Math.floor(height / 6)); // Minimal 120px untuk scan yang lebih baik
+                let qrSize = baseSize;
+
+                if (settings.qrCodeSize === 's') qrSize = baseSize * 0.8; // Kecil
+                if (settings.qrCodeSize === 'l') qrSize = baseSize * 1.2; // Besar
+
+                // Tentukan posisi QR code
+                const margin = Math.floor(qrSize * 0.1);
+                const posCoords = {
+                    tl: { x: margin, y: margin },
+                    tr: { x: width - margin - qrSize, y: margin },
+                    bl: { x: margin, y: height - margin - qrSize },
+                    br: { x: width - margin - qrSize, y: height - margin - qrSize }
+                };
+
+                const qrPos = posCoords[settings.qrCodePos] || posCoords.br;
+
+                // Tambah background putih untuk kontras yang lebih baik
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.fillRect(qrPos.x - 5, qrPos.y - 5, qrSize + 10, qrSize + 10);
+
+                // Gambar QR code ke canvas
+                ctx.drawImage(img, qrPos.x, qrPos.y, qrSize, qrSize);
+
+                // Pastikan tidak bentrok dengan teks/logo
+                this.adjustPositionForConflict(ctx, qrPos, qrSize, width, height);
+
+                resolve();
+            };
+            img.onerror = () => resolve(); // Lanjutkan meskipun error
+        });
+    }
+
+    /**
+     * Proses QR code secara lazy (async)
+     */
+    async processQRCodeLazy(ctx, canvasWidth, canvasHeight, basicDataUrl) {
+        setTimeout(async () => {
+            if (this.state.settings.qrCodeEnabled && this.qrCodeGenerator) {
+                try {
+                    console.log('Adding QR code to canvas (lazy), location:', this.state.location);
+                    await this.addQRCodeToCanvas(ctx, canvasWidth, canvasHeight);
+
+                    // Simpan hasil akhir dengan kualitas penuh setelah QR code selesai
+                    const finalDataUrl = ctx.canvas.toDataURL('image/jpeg', 0.85);
+                    this.eventBus.emit('canvas:captureComplete', finalDataUrl);
+                } catch (error) {
+                    console.error('Error in processQRCodeLazy:', error);
+                    // Jika error saat menambahkan QR code, kirim data basic saja
+                    // agar foto minimal bisa disimpan tanpa QR code
+                    if (basicDataUrl) {
+                        this.eventBus.emit('canvas:captureComplete', basicDataUrl);
+                    } else {
+                        // Jika tidak ada basicDataUrl sebagai fallback, gunakan versi yang diambil dari canvas langsung
+                        const fallbackDataUrl = ctx.canvas.toDataURL('image/jpeg', 0.70);
+                        this.eventBus.emit('canvas:captureComplete', fallbackDataUrl);
+                    }
+                }
             }
-            
-            const mapUrl = this.qrCodeGenerator.generateMapUrl(
-                lat,
-                lng
-            );
+        }, 0);
+    }
 
-            // Generate QR code image
-            const qrCodeImage = await this.qrCodeGenerator.generateLocationQRCode(this.state.location);
+    async capture() {
+        // Tambahkan permintaan capture ke queue
+        return new Promise((resolve, reject) => {
+            this.captureQueue.push({ resolve, reject });
 
-            if (!qrCodeImage) {
-                console.warn('Gagal membuat QR code - mungkin location tidak valid');
-                return;
+            // Proses queue jika belum sedang diproses
+            if (!this.isProcessing) {
+                this.processCaptureQueue();
             }
+        });
+    }
 
-            // Load image untuk digambar ke canvas
-            const img = new Image();
-            img.src = qrCodeImage;
+    async processCaptureQueue() {
+        if (this.captureQueue.length === 0 || this.isProcessing) {
+            return;
+        }
 
-            // Harus menunggu image load sebelum menggambar
-            await new Promise((resolve) => {
-                img.onload = () => {
-                    // Hitung ukuran QR code berdasarkan pengaturan - minimal 120px untuk scanner mobile
-                    const baseSize = Math.max(120, Math.floor(canvasHeight / 6)); // Minimal 120px untuk scan yang lebih baik
-                    let qrSize = baseSize;
+        // Tandai bahwa sedang diproses
+        this.isProcessing = true;
 
-                    if (this.state.settings.qrCodeSize === 's') qrSize = baseSize * 0.8; // Kecil
-                    if (this.state.settings.qrCodeSize === 'l') qrSize = baseSize * 1.2; // Besar
+        // Ambil permintaan pertama dari queue
+        const { resolve, reject } = this.captureQueue.shift();
 
-                    // Tentukan posisi QR code - gunakan margin kecil untuk membuat lebih ke pojok
-                    const margin = Math.floor(qrSize * 0.1); // Margin kecil untuk membuat QR code lebih ke pojok
-                    const posCoords = {
-                        tl: { x: margin, y: margin },
-                        tr: { x: canvasWidth - margin - qrSize, y: margin },
-                        bl: { x: margin, y: canvasHeight - margin - qrSize },
-                        br: { x: canvasWidth - margin - qrSize, y: canvasHeight - margin - qrSize }
+        // Gunakan strategi chunked processing untuk menghindari blocking
+        setTimeout(async () => {
+            try {
+                const vid = this.dom.video;
+                const canvas = this.dom.canvas;
+
+                // Check if required DOM elements exist
+                if (!vid || !canvas) {
+                    console.error('Video or canvas element not found for capture');
+                    resolve();
+                    this.isProcessing = false;
+                    this.processCaptureQueue(); // Proses item berikutnya dalam queue
+                    return;
+                }
+
+                // Check if video is ready before attempting to capture
+                if (vid.readyState < vid.HAVE_ENOUGH_DATA) {
+                    console.error('Video not ready for capture, readyState:', vid.readyState);
+                    // Try to wait briefly for video to be ready
+                    await new Promise((resolve) => {
+                        const checkReady = () => {
+                            if (vid.readyState >= vid.HAVE_ENOUGH_DATA) {
+                                resolve();
+                            } else {
+                                setTimeout(checkReady, 50);
+                            }
+                        };
+                        checkReady();
+                    });
+
+                    // Double check after waiting
+                    if (vid.readyState < vid.HAVE_ENOUGH_DATA) {
+                        console.error('Video still not ready after waiting, cannot capture');
+                        this.eventBus.emit('canvas:captureComplete', canvas.toDataURL('image/jpeg', 0.70));
+                        resolve();
+                        this.isProcessing = false;
+                        this.processCaptureQueue();
+                        return;
+                    }
+                }
+
+                // Optimasi ukuran canvas untuk kinerja
+                let canvasWidth = vid.videoWidth;
+                let canvasHeight = vid.videoHeight;
+
+                // Batasi ukuran maksimum canvas untuk kinerja
+                if (canvasWidth > this.maxCanvasWidth) {
+                    const ratio = this.maxCanvasWidth / canvasWidth;
+                    canvasWidth = this.maxCanvasWidth;
+                    canvasHeight = canvasHeight * ratio;
+                }
+
+                if (canvasHeight > this.maxCanvasHeight) {
+                    const ratio = this.maxCanvasHeight / canvasHeight;
+                    canvasHeight = this.maxCanvasHeight;
+                    canvasWidth = canvasWidth * ratio;
+                }
+
+                // Kirim permintaan pemrosesan ke Web Worker
+                if (this.worker) {
+                    // For Web Workers, we can't directly access video frame from the main thread
+                    // So instead, we'll use the fallback method which runs in the main thread
+                    // This is because Web APIs like video capture don't work in worker context
+                    // Or implement a more appropriate approach for worker processing
+                    const processData = {
+                        width: canvasWidth,
+                        height: canvasHeight,
+                        // Indicate that this is video frame processing so worker knows to fall back
+                        videoFrame: true,
+                        location: this.state.location,
+                        settings: this.state.settings,
+                        customLogo: this.state.customLogoImg ? {
+                            url: this.state.customLogoImg.src,
+                            width: this.state.customLogoImg.width,
+                            height: this.state.customLogoImg.height
+                        } : null
                     };
 
-                    const qrPos = posCoords[this.state.settings.qrCodePos] || posCoords.br;
+                    // Tunggu hasil dari worker
+                    const result = await this.sendToWorker({
+                        operation: 'processImage',
+                        data: processData
+                    });
 
-                    // Tambah background putih untuk kontras yang lebih baik
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // Semi-transparan putih
-                    ctx.fillRect(qrPos.x - 5, qrPos.y - 5, qrSize + 10, qrSize + 10);
+                    if (result && result.bitmap) {
+                        // Jika OffscreenCanvas didukung, hasilnya adalah ImageBitmap
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) {
+                            canvas.width = canvasWidth;
+                            canvas.height = canvasHeight;
+                            ctx.drawImage(result.bitmap, 0, 0);
 
-                    // Gambar QR code ke canvas
-                    ctx.drawImage(img, qrPos.x, qrPos.y, qrSize, qrSize);
+                            // Tambahkan logo yang tertunda jika ada
+                            if (this.pendingLogo) {
+                                await this.drawPendingLogo(ctx, this.pendingLogo, canvasWidth, canvasHeight);
+                                this.pendingLogo = null; // Reset
+                            }
 
-                    // Pastikan tidak bentrok dengan teks/logo
-                    this.adjustPositionForConflict(ctx, qrPos, qrSize, canvasWidth, canvasHeight);
+                            // Emit hasil dasar ke UI - beri feedback segera ke pengguna
+                            // Kompresi lebih cepat untuk kecepatan respons
+                            const basicDataUrl = canvas.toDataURL('image/jpeg', 0.70);
+                            this.eventBus.emit('canvas:basicReady', basicDataUrl);
 
+                            // Tambahkan QR code yang tertunda jika ada, atau proses secara lazy
+                            if (this.pendingQRCode) {
+                                try {
+                                    await this.drawPendingQRCode(ctx, this.pendingQRCode, canvasWidth, canvasHeight);
+                                    this.pendingQRCode = null; // Reset
+
+                                    // Simpan hasil akhir setelah QR code selesai
+                                    const finalDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                                    this.eventBus.emit('canvas:captureComplete', finalDataUrl);
+                                } catch (error) {
+                                    console.error('Error drawing pending QR code, sending basic image:', error);
+                                    // Jika error saat menambahkan QR code, kirim data basic saja
+                                    const basicDataUrl = canvas.toDataURL('image/jpeg', 0.70);
+                                    this.eventBus.emit('canvas:captureComplete', basicDataUrl);
+                                }
+                            } else if (this.state.settings.qrCodeEnabled && this.qrCodeGenerator) {
+                                // Proses QR code secara lazy
+                                const basicDataUrlForLazy = canvas.toDataURL('image/jpeg', 0.70);
+                                this.processQRCodeLazy(ctx, canvasWidth, canvasHeight, basicDataUrlForLazy);
+                            } else {
+                                // Jika tidak ada QR code, kirim hasil akhir sekarang
+                                const finalDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                                this.eventBus.emit('canvas:captureComplete', finalDataUrl);
+                            }
+                        }
+                    } else if (result && result.useFallback) {
+                        // Jika worker tidak mendukung OffscreenCanvas, gunakan fallback
+                        await this.fallbackCapture(canvas, vid, canvasWidth, canvasHeight);
+                    }
+                } else {
+                    // Jika worker tidak tersedia, gunakan fallback
+                    await this.fallbackCapture(canvas, vid, canvasWidth, canvasHeight);
+                }
+
+                // Resolve the promise
+                resolve();
+
+                // Tandai bahwa sudah selesai diproses dan proses item berikutnya
+                this.isProcessing = false;
+                this.processCaptureQueue(); // Proses item berikutnya dalam queue
+            } catch (error) {
+                console.error('Error in capture:', error);
+                reject(error);
+
+                // Tandai bahwa sudah selesai diproses dan proses item berikutnya
+                this.isProcessing = false;
+                this.processCaptureQueue(); // Proses item berikutnya dalam queue
+            }
+        }, 0); // Defer execution using setTimeout
+    }
+
+    /**
+     * Menambahkan QR code ke canvas (async non-blocking)
+     */
+    async addQRCodeToCanvas(ctx, canvasWidth, canvasHeight) {
+        return new Promise((resolve) => {
+            // Tampilkan indikator proses QR code
+            this.showQRGeneratingIndicator();
+
+            // Gunakan setTimeout untuk mencegah blocking di main thread
+            setTimeout(async () => {
+                try {
+                    // Generate URL untuk QR code
+                    const lat = parseFloat(this.state.location.lat);
+                    const lng = parseFloat(this.state.location.lng);
+
+                    if (isNaN(lat) || isNaN(lng)) {
+                        console.warn('Invalid location coordinates for QR code generation');
+                        this.hideQRGeneratingIndicator();
+                        resolve();
+                        return;
+                    }
+
+                    // Generate QR code image secara async
+                    const qrCodeImage = await this.qrCodeGenerator.generateLocationQRCode(this.state.location);
+
+                    if (!qrCodeImage) {
+                        console.warn('Gagal membuat QR code - mungkin location tidak valid');
+                        this.hideQRGeneratingIndicator();
+                        resolve();
+                        return;
+                    }
+
+                    // Load image untuk digambar ke canvas
+                    const img = new Image();
+                    img.src = qrCodeImage;
+
+                    img.onload = () => {
+                        // Hitung ukuran QR code berdasarkan pengaturan - minimal 120px untuk scanner mobile
+                        const baseSize = Math.max(120, Math.floor(canvasHeight / 6)); // Minimal 120px untuk scan yang lebih baik
+                        let qrSize = baseSize;
+
+                        if (this.state.settings.qrCodeSize === 's') qrSize = baseSize * 0.8; // Kecil
+                        if (this.state.settings.qrCodeSize === 'l') qrSize = baseSize * 1.2; // Besar
+
+                        // Tentukan posisi QR code - gunakan margin kecil untuk membuat lebih ke pojok
+                        const margin = Math.floor(qrSize * 0.1); // Margin kecil untuk membuat QR code lebih ke pojok
+                        const posCoords = {
+                            tl: { x: margin, y: margin },
+                            tr: { x: canvasWidth - margin - qrSize, y: margin },
+                            bl: { x: margin, y: canvasHeight - margin - qrSize },
+                            br: { x: canvasWidth - margin - qrSize, y: canvasHeight - margin - qrSize }
+                        };
+
+                        const qrPos = posCoords[this.state.settings.qrCodePos] || posCoords.br;
+
+                        // Tambah background putih untuk kontras yang lebih baik
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // Semi-transparan putih
+                        ctx.fillRect(qrPos.x - 5, qrPos.y - 5, qrSize + 10, qrSize + 10);
+
+                        // Gambar QR code ke canvas
+                        ctx.drawImage(img, qrPos.x, qrPos.y, qrSize, qrSize);
+
+                        // Pastikan tidak bentrok dengan teks/logo
+                        this.adjustPositionForConflict(ctx, qrPos, qrSize, canvasWidth, canvasHeight);
+
+                        this.hideQRGeneratingIndicator();
+                        resolve();
+                    };
+
+                    img.onerror = () => {
+                        console.error('Gagal load QR code image');
+                        this.hideQRGeneratingIndicator();
+                        resolve();
+                    };
+                } catch (error) {
+                    console.error('Error adding QR code to canvas:', error);
+                    this.hideQRGeneratingIndicator();
                     resolve();
-                };
+                }
+            }, 0); // Defer execution using setTimeout
+        });
+    }
 
-                img.onerror = () => {
-                    console.error('Gagal load QR code image');
-                    resolve();
-                };
-            });
-        } catch (error) {
-            console.error('Error adding QR code to canvas:', error);
+    /**
+     * Menampilkan indikator saat QR code sedang diproses
+     */
+    showQRGeneratingIndicator() {
+        if (this.dom.lblGeo) {
+            const originalHTML = this.dom.lblGeo.innerHTML;
+            this.dom.lblGeo.innerHTML = `<i class="ph ph-spinner animate-spin mr-1 text-blue-400" aria-hidden="true"></i> Menyisipkan QR...`;
+
+            // Simpan state asli untuk dikembalikan nanti
+            this.originalGeoHTML = originalHTML;
+        }
+    }
+
+    /**
+     * Menyembunyikan indikator proses QR code
+     */
+    hideQRGeneratingIndicator() {
+        if (this.dom.lblGeo && this.originalGeoHTML) {
+            this.dom.lblGeo.innerHTML = this.originalGeoHTML;
+            this.originalGeoHTML = null;
         }
     }
 
@@ -278,6 +744,16 @@ export class CanvasProcessorService {
             ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
             ctx.fillRect(qrPos.x - 5, qrPos.y - 5, qrSize + 10, qrSize + 10);
             // Catatan: Gambar ulang QR code di sini tidak efisien, tapi untuk sekarang cukup
+        }
+    }
+
+    /**
+     * Cleanup resources
+     */
+    destroy() {
+        if (this.worker) {
+            this.worker.terminate();
+            this.worker = null;
         }
     }
 }
