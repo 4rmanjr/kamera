@@ -3,8 +3,8 @@
  * Menginisialisasi dan menggabungkan semua modul melalui dependency injection
  */
 
-import { DIContainer, container } from './container.js';
-import { initDOM } from './dom.js';
+import { DIContainer, container } from './core/container.js';
+import { initDOM } from './core/dom.js';
 
 // ================= BOOTSTRAP =================
 window.onload = async () => {

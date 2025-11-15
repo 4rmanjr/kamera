@@ -25,7 +25,7 @@ export class CanvasProcessorService {
     initWorker() {
         try {
             // Membuat Web Worker dari file eksternal untuk pemrosesan canvas
-            this.worker = new Worker('js/worker/canvas-worker.js');
+            this.worker = new Worker('js/workers/canvas-worker.js');
 
             // Handle messages dari worker
             this.worker.onmessage = (e) => {

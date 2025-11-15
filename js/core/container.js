@@ -6,16 +6,16 @@
 import { EventBus, eventBus } from './eventBus.js';
 import { DOM, initDOM } from './dom.js';
 import { State } from './state.js';
-import { StorageService } from './storage.js';
-import { CameraService } from './camera.js';
-import { LocationService } from './location.js';
-import { CanvasProcessorService } from './canvasProcessor.js';
-import { GalleryController } from './gallery.js';
-import { PreviewController } from './preview.js';
-import { UIController } from './ui.js';
-import { Utils } from './utils.js';
-import { QRCodeGenerator } from './qrCodeGenerator.js';
-import { NotificationService } from './notificationService.js';
+import { StorageService } from '../services/storage.js';
+import { CameraService } from '../services/camera.js';
+import { LocationService } from '../services/location.js';
+import { CanvasProcessorService } from '../services/canvasProcessor.js';
+import { GalleryController } from '../components/gallery.js';
+import { PreviewController } from '../components/preview.js';
+import { UIController } from '../components/ui.js';
+import { Utils } from '../utils/utils.js';
+import { QRCodeGenerator } from '../models/qrCodeGenerator.js';
+import { NotificationService } from '../services/notificationService.js';
 
 
 export class DIContainer {
