@@ -3,6 +3,9 @@
  * Fungsi-fungsi utilitas untuk operasi lokasi
  */
 
+// Kita tidak gunakan geolib karena kita prioritaskan performa dan ukuran bundle kecil
+// Fungsi manual lebih ringan untuk operasi sederhana seperti ini
+
 export class LocationUtils {
     /**
      * Fungsi untuk menghitung jarak antara dua titik (dalam km)

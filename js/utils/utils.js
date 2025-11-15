@@ -3,6 +3,9 @@
  * Menyimpan fungsi-fungsi utilitas yang digunakan di berbagai modul
  */
 
+import { format } from 'date-fns';
+import { id } from 'date-fns/locale';
+
 export class Utils {
     /**
      * Fungsi untuk memperbarui settings
@@ -18,12 +21,12 @@ export class Utils {
     }
 
     /**
-     * Format tanggal ke locale Indonesia
+     * Format tanggal ke locale Indonesia dengan date-fns
      * @param {Date} date - Objek tanggal
      * @returns {string} String tanggal yang diformat
      */
     static formatDate(date) {
-        return date.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'medium' });
+        return format(date, 'EEEE, dd MMMM yyyy \'pukul\' HH:mm:ss', { locale: id });
     }
 }
 

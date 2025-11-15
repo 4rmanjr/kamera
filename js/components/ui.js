@@ -422,18 +422,6 @@ export class UIController {
         if (manifestLink) manifestLink.href = manifestUrl;
         if (appleIconLink) appleIconLink.href = iconUrl;
 
-        // 4. Register Service Worker untuk offline capability
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then((registration) => {
-                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
-                    })
-                    .catch((error) => {
-                        console.log('ServiceWorker registration failed: ', error);
-                    });
-            });
-        }
     }
 
     // Handle back button navigation

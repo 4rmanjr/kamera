@@ -1,5 +1,5 @@
-const STATIC_CACHE_NAME = 'geo-camera-pro-static-v7';
-const ASSETS_CACHE_NAME = 'geo-camera-pro-assets-v7';
+const STATIC_CACHE_NAME = 'geo-camera-pro-static-v8';
+const ASSETS_CACHE_NAME = 'geo-camera-pro-assets-v8';
 const urlsToCache = [
   '/',
   '/index.html',

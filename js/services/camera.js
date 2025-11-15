@@ -191,13 +191,19 @@ export class CameraService {
 
     async shutter() {
         // Check if GPS location is ready before capturing
-        const isLocationReady = this.isLocationReady();
-        
+        let isLocationReady = this.isLocationReady();
+
+        // Jika lokasi belum siap, tunggu sejenak untuk mendapatkan lokasi
         if (!isLocationReady) {
-            // Show notification that GPS is not ready
-            this.showGPSNotification();
+            // Tunggu hingga lokasi siap sebelum mengambil foto (maksimal 3 detik)
+            isLocationReady = await this.waitForLocationReady(50, 3000); // Akurasi <= 50 meter dalam 3 detik
+
+            // Jika setelah ditunggu tetap tidak siap, beri tahu pengguna
+            if (!isLocationReady) {
+                this.showGPSNotification();
+            }
         }
-        
+
         if(navigator.vibrate) navigator.vibrate(50);
         if (this.dom.flashOverlay) {
             this.dom.flashOverlay.classList.add('flash-active');
@@ -207,21 +213,49 @@ export class CameraService {
                 }
             }, 150);
         }
-        
-        // Emit event untuk memberi tahu bahwa lokasi mungkin perlu diperbarui 
+
+        // Emit event untuk memberi tahu bahwa lokasi mungkin perlu diperbarui
         // sebelum pengambilan gambar untuk memastikan akurasi terkini digunakan
         this.eventBus.emit('location:requestRefresh');
-        
+
         await this.canvasProcessorService.capture();
+    }
+
+    /**
+     * Tunggu hingga lokasi siap sebelum mengambil foto
+     * @param {number} minAccuracy - Akurasi minimum yang diinginkan (meter)
+     * @param {number} timeout - Waktu maksimum untuk menunggu (milidetik)
+     * @returns {Promise<boolean>} True jika lokasi siap sebelum timeout
+     */
+    async waitForLocationReady(minAccuracy = 100, timeout = 3000) {
+        const startTime = Date.now();
+        let locationReady = this.isLocationReady();
+
+        // Cek apakah akurasi sudah memenuhi syarat minimum
+        const hasGoodAccuracy = () => {
+            const acc = parseFloat(this.state.location.acc);
+            return !isNaN(acc) && acc > 0 && acc <= minAccuracy;
+        };
+
+        while ((!locationReady || !hasGoodAccuracy()) && (Date.now() - startTime) < timeout) {
+            // Tunggu sebentar sebelum cek ulang
+            await new Promise(resolve => setTimeout(resolve, 250));
+            locationReady = this.isLocationReady();
+        }
+
+        return locationReady && hasGoodAccuracy();
     }
 
     // Check if GPS location is ready with valid coordinates
     isLocationReady() {
         const lat = parseFloat(this.state.location.lat);
         const lng = parseFloat(this.state.location.lng);
-        
-        // Location is ready if we have valid coordinates (not NaN and not the default 0,0)
-        return !isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0);
+        const acc = parseFloat(this.state.location.acc);
+
+        // Location is ready if we have valid coordinates that are not 0,0 and have reasonable accuracy
+        return !isNaN(lat) && !isNaN(lng) && !isNaN(acc) &&
+               (Math.abs(lat) > 0.00001 || Math.abs(lng) > 0.00001) &&
+               acc > 0 && acc <= 1000;
     }
 
     // Show notification about GPS status using global notification service

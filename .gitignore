@@ -2,9 +2,15 @@
 node_modules/
 
 # Build outputs
-/dist/
-/build/
-/public/
+dist/
+build/
+public/
+
+# Vite specific files
+.vite/
+.vite/cache/
+.output/
+/output/
 
 # Environment variables
 .env
@@ -72,6 +78,7 @@ Thumbs.db
 # Cache
 .cache/
 .nyc_output/
+.workbox/
 
 # Lock files - uncommented to track dependency versions
 # package-lock.json
@@ -117,9 +124,27 @@ local.properties
 # Old project version - not needed in current repository
 web-2.1.2/
 
-# Files that are built/compiled and should not be tracked
-# *.min.js  # Commented out - we need qrcode.min.js
-# *.min.css # Commented out - we need tailwind.css
+# Temporary build artifacts
+*.tmp
+*.temp
 
-# Service worker - uncommented because it's essential for PWA
-# /sw.js
+# Additional cache files
+.node_modules
+.npm
+.yarn
+
+# Build artifacts that should not be tracked
+*.js.map
+*.css.map
+
+# File hasil build (hasil dari npm run build)
+/dist/
+
+# Exclude old qrcode.min.js since we now use npm library
+# (we can remove this line if we want to keep the local file for some reason)
+# js/qrcode.min.js
+
+# Service worker files that are auto-generated
+sw.js
+workbox-*.js
+registerSW.js
