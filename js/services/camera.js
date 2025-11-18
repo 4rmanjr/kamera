@@ -15,12 +15,16 @@ export class CameraService {
     async start() {
         if (this.state.stream) this.state.stream.getTracks().forEach(t => t.stop());
         try {
+            // Deteksi apakah perangkat rendah dan sesuaikan resolusi kamera
+            const isLowEndDevice = this.isLowEndDevice();
+            const videoConstraints = {
+                facingMode: this.state.facingMode,
+                width: isLowEndDevice ? { ideal: 1280 } : { ideal: 1920 },
+                height: isLowEndDevice ? { ideal: 720 } : { ideal: 1080 }
+            };
+
             this.state.stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: this.state.facingMode,
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 }
-                },
+                video: videoConstraints,
                 audio: false
             });
 
@@ -82,6 +86,18 @@ export class CameraService {
                 this.notificationService.show(errorMessage, 'error', 3000);
             }
         }
+    }
+
+    // Fungsi untuk mendeteksi apakah perangkat memiliki spesifikasi rendah
+    isLowEndDevice() {
+        // Mendeteksi perangkat berdasarkan RAM dan core CPU
+        const navigatorConnection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        const lowMemory = navigator.deviceMemory && navigator.deviceMemory < 4; // Kurang dari 4GB RAM
+        const lowCores = navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4; // Kurang dari 4 core
+        const slowConnection = navigatorConnection && (navigatorConnection.effectiveType === 'slow-2g' || navigatorConnection.effectiveType === '2g');
+
+        // Kombinasi faktor untuk menentukan perangkat rendah
+        return lowMemory || lowCores || slowConnection;
     }
 
     checkCapabilities() {

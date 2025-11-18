@@ -9,9 +9,11 @@ export class CanvasProcessorService {
         this.dom = dom;
         this.eventBus = eventBus;
         this.qrCodeGenerator = qrCodeGenerator;
+        // Deteksi apakah perangkat rendah untuk mengatur batas maksimum dimensi canvas
+        const isLowEndDevice = this.isLowEndDevice();
         // Batas maksimum dimensi canvas untuk optimasi
-        this.maxCanvasWidth = 1920;
-        this.maxCanvasHeight = 1080;
+        this.maxCanvasWidth = isLowEndDevice ? 1280 : 1920;
+        this.maxCanvasHeight = isLowEndDevice ? 720 : 1080;
 
         // Inisialisasi Web Worker untuk operasi berat
         this.worker = null;
@@ -20,6 +22,18 @@ export class CanvasProcessorService {
         // Queue untuk menangani multiple capture request
         this.captureQueue = [];
         this.isProcessing = false;
+    }
+
+    // Fungsi untuk mendeteksi apakah perangkat memiliki spesifikasi rendah
+    isLowEndDevice() {
+        // Mendeteksi perangkat berdasarkan RAM dan core CPU
+        const navigatorConnection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        const lowMemory = navigator.deviceMemory && navigator.deviceMemory < 4; // Kurang dari 4GB RAM
+        const lowCores = navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4; // Kurang dari 4 core
+        const slowConnection = navigatorConnection && (navigatorConnection.effectiveType === 'slow-2g' || navigatorConnection.effectiveType === '2g');
+
+        // Kombinasi faktor untuk menentukan perangkat rendah
+        return lowMemory || lowCores || slowConnection;
     }
 
     initWorker() {
@@ -375,8 +389,9 @@ export class CanvasProcessorService {
                 const baseSize = Math.max(120, Math.floor(height / 6)); // Minimal 120px untuk scan yang lebih baik
                 let qrSize = baseSize;
 
-                if (settings.qrCodeSize === 's') qrSize = baseSize * 0.8; // Kecil
-                if (settings.qrCodeSize === 'l') qrSize = baseSize * 1.2; // Besar
+                if (settings.qrCodeSize === 's') qrSize = Math.max(120, baseSize * 0.8); // Kecil - tetap minimal 120px
+                if (settings.qrCodeSize === 'm') qrSize = Math.max(160, baseSize); // Sedang - tetap minimal 160px
+                if (settings.qrCodeSize === 'l') qrSize = Math.max(200, baseSize * 1.2); // Besar - tetap minimal 200px
 
                 // Tentukan posisi QR code
                 const margin = Math.floor(qrSize * 0.1);
@@ -648,8 +663,8 @@ export class CanvasProcessorService {
                     img.src = qrCodeImage;
 
                     img.onload = () => {
-                        // Hitung ukuran QR code berdasarkan pengaturan - minimal 120px untuk scanner mobile
-                        const baseSize = Math.max(120, Math.floor(canvasHeight / 6)); // Minimal 120px untuk scan yang lebih baik
+                        // Hitung ukuran QR code berdasarkan pengaturan - minimal 160px untuk scanner mobile (dinaikkan dari 120)
+                        const baseSize = Math.max(160, Math.floor(canvasHeight / 6)); // Minimal 160px untuk scan yang lebih baik
                         let qrSize = baseSize;
 
                         if (this.state.settings.qrCodeSize === 's') qrSize = baseSize * 0.8; // Kecil

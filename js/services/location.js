@@ -19,9 +19,13 @@ export class LocationService {
         this.MIN_ACCURACY = this.config.MIN_ACCURACY_THRESHOLD; // Akurasi target dalam meter
         this.BEST_LOCATION_TIMEOUT = this.config.BEST_LOCATION_TIMEOUT_MS; // dalam milidetik
         this.MOVEMENT_THRESHOLD = this.config.MOVEMENT_THRESHOLD_METERS; // Meter - ambang perubahan posisi yang signifikan
-        this.UPDATE_DEBOUNCE = this.config.UPDATE_DEBOUNCE_MS; // Milidetik - lebih cepat untuk update UI real-time
-        this.POSITION_HISTORY_SIZE = this.config.POSITION_HISTORY_SIZE; // Ukuran riwayat posisi
-        this.FAST_ACQUISITION_TIMEOUT = this.config.FAST_ACQUISITION_TIMEOUT_MS; // Waktu awal untuk akuisisi cepat
+        // Deteksi apakah perangkat rendah untuk mengatur parameter geolocation
+        const isLowEndDevice = this.isLowEndDevice();
+
+        // Optimalkan update debounce dan history size untuk perangkat rendah
+        this.UPDATE_DEBOUNCE = isLowEndDevice ? this.config.UPDATE_DEBOUNCE_MS * 2 : this.config.UPDATE_DEBOUNCE_MS; // Milidetik - lebih cepat untuk update UI real-time
+        this.POSITION_HISTORY_SIZE = isLowEndDevice ? Math.floor(this.config.POSITION_HISTORY_SIZE / 2) : this.config.POSITION_HISTORY_SIZE; // Ukuran riwayat posisi
+        this.FAST_ACQUISITION_TIMEOUT = isLowEndDevice ? this.config.FAST_ACQUISITION_TIMEOUT_MS * 1.5 : this.config.FAST_ACQUISITION_TIMEOUT_MS; // Waktu awal untuk akuisisi cepat
 
         // Status internal
         this.bestLocation = null;
@@ -45,6 +49,18 @@ export class LocationService {
         this.eventBus.subscribe('location:requestRefresh', () => {
             this.handleLocationRefreshRequest();
         });
+    }
+
+    // Fungsi untuk mendeteksi apakah perangkat memiliki spesifikasi rendah
+    isLowEndDevice() {
+        // Mendeteksi perangkat berdasarkan RAM dan core CPU
+        const navigatorConnection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        const lowMemory = navigator.deviceMemory && navigator.deviceMemory < 4; // Kurang dari 4GB RAM
+        const lowCores = navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4; // Kurang dari 4 core
+        const slowConnection = navigatorConnection && (navigatorConnection.effectiveType === 'slow-2g' || navigatorConnection.effectiveType === '2g');
+
+        // Kombinasi faktor untuk menentukan perangkat rendah
+        return lowMemory || lowCores || slowConnection;
     }
 
     init() {

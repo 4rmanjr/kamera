@@ -39,15 +39,15 @@ export class DIContainer {
         const qrCodeGenerator = new QRCodeGenerator();
 
         // Inisialisasi layanan dengan dependencies
-        const storageService = new StorageService({ 
-            state: this.state, 
-            dom: this.dom, 
-            eventBus: this.eventBus 
+        const storageService = new StorageService({
+            state: this.state,
+            dom: this.dom,
+            eventBus: this.eventBus
         });
-        
-        const canvasProcessorService = new CanvasProcessorService({ 
-            state: this.state, 
-            dom: this.dom, 
+
+        const canvasProcessorService = new CanvasProcessorService({
+            state: this.state,
+            dom: this.dom,
             eventBus: this.eventBus,
             qrCodeGenerator
         });

@@ -65,6 +65,12 @@ export class UIController {
                 this.storageService.loadLastThumb();
             }
         });
+
+        // Deteksi apakah perangkat rendah dan sesuaikan UI jika perlu
+        if (this.isLowEndDevice()) {
+            console.log("Perangkat rendah terdeteksi, menyesuaikan pengaturan untuk kinerja optimal");
+            // Di sini bisa ditambahkan penyesuaian tambahan untuk UI pada perangkat rendah
+        }
     }
 
     initListeners() {
@@ -638,5 +644,17 @@ export class UIController {
     registerModalOpen(modalName) {
         // Push state to browser history to handle back button
         history.pushState({ page: modalName }, '', location.href);
+    }
+
+    // Fungsi untuk mendeteksi apakah perangkat memiliki spesifikasi rendah
+    isLowEndDevice() {
+        // Mendeteksi perangkat berdasarkan RAM dan core CPU
+        const navigatorConnection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        const lowMemory = navigator.deviceMemory && navigator.deviceMemory < 4; // Kurang dari 4GB RAM
+        const lowCores = navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4; // Kurang dari 4 core
+        const slowConnection = navigatorConnection && (navigatorConnection.effectiveType === 'slow-2g' || navigatorConnection.effectiveType === '2g');
+
+        // Kombinasi faktor untuk menentukan perangkat rendah
+        return lowMemory || lowCores || slowConnection;
     }
 }

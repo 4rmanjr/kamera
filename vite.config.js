@@ -9,15 +9,24 @@ export default defineConfig({
   build: {
     outDir: 'dist', // Output build akan disimpan di folder 'dist'
     assetsDir: 'assets', // Folder untuk file statis
+    // Opsi tambahan untuk mengurangi ukuran build
+    target: 'es2020', // Target browser modern
+    minify: 'esbuild', // Minify mode
+    // Optimasi bundle untuk perangkat rendah
+    cssCodeSplit: false, // Gabungkan semua CSS agar tidak ada request tambahan
+    sourcemap: false, // Nonaktifkan sourcemap untuk produksi
     rollupOptions: {
       // Input file untuk build (entry point)
       input: {
         main: './index.html' // Titik masuk utama aplikasi
+      },
+      output: {
+        manualChunks: {
+          // Pisahkan vendor besar ke chunks terpisah
+          vendor: ['qrcode']
+        }
       }
-    },
-    // Opsi tambahan untuk mengurangi ukuran build
-    target: 'es2020', // Target browser modern
-    minify: 'esbuild', // Minify mode
+    }
   },
 
   // Server development

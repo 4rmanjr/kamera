@@ -41,8 +41,8 @@ export class QRCodeGenerator {
         try {
             // Gunakan library qrcode dari npm untuk membuat data URL langsung
             const qrCodeDataUrl = await QRCode.toDataURL(text, {
-                width: 300, // Ukuran QR code
-                margin: 2, // Jarak antar modul
+                width: 400, // Ukuran QR code - diperbesar dari 300 jadi 400
+                margin: 4, // Jarak antar modul - diperbesar dari 2 jadi 4
                 color: {
                     dark: '#000000', // Warna modul gelap (hitam)
                     light: '#FFFFFF' // Warna modul terang (putih)
