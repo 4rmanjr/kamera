@@ -55,6 +55,9 @@ This is a static web application that requires a build process for optimal offli
 
 1. Simply serve the files using any web server:
    ```bash
+   # Using Vite (recommended)
+   npm run dev
+   
    # Using Python
    python -m http.server 8000
 
@@ -70,9 +73,9 @@ This is a static web application that requires a build process for optimal offli
 ### Development Commands
 
 - **Build CSS**: `npx tailwindcss -o ./css/tailwind.css --minify`
-- **Serve**: Use any static file server (as shown above)
-- **Lint**: Manual code review based on guidelines in AGENTS.md
-- **Test**: Test functionality in browser, particularly in mobile environment
+- **Serve**: `npm run dev` (using Vite) or any static file server
+- **Build**: `npm run build` (to create a production build)
+- **Preview**: `npm run preview` (to preview the production build)
 
 ## Development Conventions
 

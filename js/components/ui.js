@@ -279,6 +279,34 @@ export class UIController {
                 this.utils.updateSetting(this.state.settings, 'qrCodeEnabled', e.target.checked);
             };
         }
+
+        // Event listeners untuk export/import settings
+        const btnExportSettings = document.getElementById('btn-export-settings');
+        if (btnExportSettings) {
+            btnExportSettings.onclick = () => {
+                this.utils.exportSettings(this.state.settings);
+            };
+        }
+
+        const btnImportSettings = document.getElementById('btn-import-settings');
+        if (btnImportSettings) {
+            btnImportSettings.onclick = () => {
+                // Trigger the hidden file input
+                const fileInput = document.getElementById('inp-import-settings');
+                if (fileInput) {
+                    fileInput.click();
+                }
+            };
+        }
+
+        const inpImportSettings = document.getElementById('inp-import-settings');
+        if (inpImportSettings) {
+            inpImportSettings.onchange = (e) => {
+                if (e.target.files && e.target.files[0]) {
+                    this.importSettings(e.target.files[0]);
+                }
+            };
+        }
     }
 
     confirm(msg, cb) {
@@ -349,6 +377,125 @@ export class UIController {
         const savedLogo = localStorage.getItem('gc_logoImg');
         if (savedLogo) this.loadLogo(savedLogo);
         this.updateSettingsUI(); // Memastikan toggle QR code juga diinisialisasi
+    }
+
+    /**
+     * Import settings from a JSON file
+     * @param {File} file - The settings file to import
+     */
+    async importSettings(file) {
+        try {
+            this.utils.importSettings(file, (error, importData) => {
+                if (error) {
+                    console.error('Error importing settings:', error);
+                    if (this.notificationService) {
+                        this.notificationService.show(`Error importing settings: ${error.message}`, 'error', 5000);
+                    } else {
+                        alert(`Error importing settings: ${error.message}`);
+                    }
+                    return;
+                }
+
+                // Validate the import data
+                const { settings: importedSettings, logo: logoData, version } = importData;
+
+                // Update the state with imported settings
+                Object.keys(importedSettings).forEach(key => {
+                    if (this.state.settings.hasOwnProperty(key)) {
+                        // Handle the special case where boolean values might be stored as strings in JSON
+                        let valueToSet = importedSettings[key];
+                        if (key === 'qrCodeEnabled') {
+                            // Convert string to boolean if needed
+                            if (typeof importedSettings[key] === 'string') {
+                                valueToSet = importedSettings[key] === 'true';
+                            } else {
+                                valueToSet = Boolean(importedSettings[key]);
+                            }
+                        }
+
+                        this.state.settings[key] = valueToSet;
+
+                        // Update localStorage with the imported value
+                        const stringValue = typeof valueToSet === 'boolean' ?
+                            String(valueToSet) : valueToSet;
+                        localStorage.setItem(`gc_${key}`, stringValue);
+                    }
+                });
+
+                // Restore the logo if it was included in the import
+                if (logoData) {
+                    localStorage.setItem('gc_logoImg', logoData);
+
+                    // Load the logo into the DOM
+                    this.loadLogo(logoData);
+                }
+
+                // Update UI to reflect the imported settings
+                this.updateAllSettingsUI();
+
+                // Show success notification
+                if (this.notificationService) {
+                    this.notificationService.show('Settings imported successfully!', 'success', 3000);
+                } else {
+                    alert('Settings imported successfully!');
+                }
+
+                console.log('Settings imported successfully', importData);
+            });
+        } catch (error) {
+            console.error('Error during settings import:', error);
+            if (this.notificationService) {
+                this.notificationService.show(`Error importing settings: ${error.message}`, 'error', 5000);
+            } else {
+                alert(`Error importing settings: ${error.message}`);
+            }
+        }
+    }
+
+    /**
+     * Update all UI elements to reflect the current settings state
+     */
+    updateAllSettingsUI() {
+        // Update project name and note inputs if they exist
+        if (this.dom.inpProject) this.dom.inpProject.value = this.state.settings.projName;
+        if (this.dom.inpNote) this.dom.inpNote.value = this.state.settings.projNote;
+
+        // Update text size buttons
+        document.querySelectorAll('.btn-size').forEach(btn => {
+            btn.classList.toggle('text-white', btn.dataset.size === this.state.settings.textSize);
+            btn.classList.toggle('bg-blue-600', btn.dataset.size === this.state.settings.textSize);
+            btn.classList.toggle('bg-gray-800', btn.dataset.size !== this.state.settings.textSize);
+        });
+
+        // Update position buttons for text
+        document.querySelectorAll('.btn-pos[data-type="text"]').forEach(btn => {
+            btn.classList.toggle('text-white', btn.dataset.pos === this.state.settings.textPos);
+            btn.classList.toggle('bg-blue-600', btn.dataset.pos === this.state.settings.textPos);
+            btn.classList.toggle('bg-gray-800', btn.dataset.pos !== this.state.settings.textPos);
+        });
+
+        // Update position buttons for logo
+        document.querySelectorAll('.btn-pos[data-type="logo"]').forEach(btn => {
+            btn.classList.toggle('text-white', btn.dataset.pos === this.state.settings.logoPos);
+            btn.classList.toggle('bg-blue-600', btn.dataset.pos === this.state.settings.logoPos);
+            btn.classList.toggle('bg-gray-800', btn.dataset.pos !== this.state.settings.logoPos);
+        });
+
+        // Update position buttons for QR code
+        document.querySelectorAll('.btn-pos[data-type="qr"]').forEach(btn => {
+            btn.classList.toggle('text-white', btn.dataset.pos === this.state.settings.qrCodePos);
+            btn.classList.toggle('bg-blue-600', btn.dataset.pos === this.state.settings.qrCodePos);
+            btn.classList.toggle('bg-gray-800', btn.dataset.pos !== this.state.settings.qrCodePos);
+        });
+
+        // Update QR code toggle
+        const qrToggle = document.getElementById('toggle-qr-code');
+        if (qrToggle) {
+            qrToggle.checked = this.state.settings.qrCodeEnabled;
+        }
+
+        // Reload settings UI
+        this.updateSettingsUI();
     }
 
     updateZoomUI(currentZoomLevel) {

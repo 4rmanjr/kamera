@@ -30,7 +30,8 @@ export const DOM = {
     txtNoLogo: null,
     galleryGrid: null,
     imgPreview: null,
-    lblCameraStatus: null
+    lblCameraStatus: null,
+    inpImportSettings: null
 };
 
 // Function to initialize DOM elements after the page has loaded
@@ -60,4 +61,5 @@ export function initDOM() {
     DOM.galleryGrid = document.getElementById('gallery-grid');
     DOM.imgPreview = document.getElementById('img-preview');
     DOM.lblCameraStatus = document.getElementById('lbl-camera-status');
+    DOM.inpImportSettings = document.getElementById('inp-import-settings');
 }
