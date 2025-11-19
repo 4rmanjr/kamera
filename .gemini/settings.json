@@ -1,8 +1,0 @@
-{
-  "experimental": {
-    "useModelRouter": false
-  },
-  "ide": {
-    "enabled": true
-  }
-}
