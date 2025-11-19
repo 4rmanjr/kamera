@@ -1,150 +1,59 @@
-# Dependencies
-node_modules/
+# =================================================================
+# General & System
+# =================================================================
 
-# Build outputs
-dist/
-build/
-public/
-
-# Vite specific files
-.vite/
-.vite/cache/
-.output/
-/output/
-
-# Environment variables
-.env
-.env.local
-.env.production
-.env.development
-
-# OS generated files
+# OS-generated files
 .DS_Store
 Thumbs.db
 ehthumbs.db
 Icon?
-.gitattributes
-*~
 
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Logs
+# Log files
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
-
-# Coverage directory used by tools like istanbul
-coverage/
-*.lcov
-
-# Temporary folders
-tmp/
-temp/
-
-# System Files
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Archives
-*.zip
-*.tar*
-*.rar
-*.7z
-
-# Private keys
-*.key
-*.pem
-*.crt
-*.cert
-
-# Database
-*.db
-*.sqlite
-
-# Cache
-.cache/
-.nyc_output/
-.workbox/
-
-# Lock files - uncommented to track dependency versions
-# package-lock.json
-# yarn.lock
-
-# Local config files
-config.local.js
-local.properties
-
-# Mobile app build files
-/platforms/
-/plugins/
-/platform/
-/www/build/
-
-# Backup files
-*.bak
-*.backup
-*~
-
-# Large files that should be managed separately
-*.mp4
-*.mov
-*.avi
-*.iso
-*.dmg
-
-# ZIP files
-*.zip
-
-# Android backup files
-*.aab
-*.apk
-
-# iOS build files
-*.ipa
-*.app
-
-# Browser extensions
-*.crx
-*.xpi
-
-# Old project version - not needed in current repository
-web-2.1.2/
-
-# Temporary build artifacts
+# Temporary files and backups
 *.tmp
 *.temp
+*~
+*.bak
+*.swp
+*.swo
+*.original
 
-# Additional cache files
-.node_modules
-.npm
-.yarn
 
-# Build artifacts that should not be tracked
-*.js.map
-*.css.map
+# =================================================================
+# Project-specific
+# =================================================================
 
-# File hasil build (hasil dari npm run build)
+# Node dependencies
+/node_modules/
+
+# Vite build output & cache
 /dist/
+.vite/
 
-# Exclude old qrcode.min.js since we now use npm library
-# (we can remove this line if we want to keep the local file for some reason)
-# js/qrcode.min.js
+# Genkit runtime data and traces
+/.genkit/
 
-# Service worker files that are auto-generated
-sw.js
-workbox-*.js
-registerSW.js
+# Gemini CLI cache and settings
+/.gemini/
+
+# Environment variables - ignore all, but allow example files
+.env*
+!.env.example
+
+# Reports & artifacts from this session
+code_review.csv
+
+# Old file backups
+js/camera.js.original
+
+
+# =================================================================
+# IDEs and Editors
+# =================================================================
+/.vscode/
+/.idea/
