@@ -6,7 +6,7 @@
 export class StorageService {
     constructor({ state, dom, eventBus }) {
         this.state = state;
-        this.dom = dom;
+        this.dom = dom; // DOM masih diperlukan untuk referensi di UI controller, tapi tidak digunakan di sini
         this.eventBus = eventBus;
         this.DB_NAME = 'GeoCamDB_v6_4';
         this.STORE = 'photos';
@@ -23,7 +23,8 @@ export class StorageService {
             };
             req.onsuccess = (e) => {
                 this.state.db = e.target.result;
-                this.loadLastThumb();
+                // Emit event to notify that the storage is ready
+                this.eventBus.emit('storage:initialized');
                 resolve();
             };
             req.onerror = (e) => {
@@ -33,57 +34,70 @@ export class StorageService {
         });
     }
 
-    savePhoto(dataUrl, callback) {
-        if (!this.state.db) return;
-        const tx = this.state.db.transaction([this.STORE], 'readwrite');
-        tx.objectStore(this.STORE).add({ data: dataUrl, date: new Date().toISOString() });
-        tx.oncomplete = () => {
-            this.loadLastThumb();
-            if (callback) callback();
-            // Emit event bahwa foto telah disimpan
-            this.eventBus.emit('photo:saved', { dataUrl });
-        };
+    savePhoto(dataUrl) {
+        return new Promise((resolve, reject) => {
+            if (!this.state.db) return reject("Database not initialized");
+            const tx = this.state.db.transaction([this.STORE], 'readwrite');
+            const request = tx.objectStore(this.STORE).add({ data: dataUrl, date: new Date().toISOString() });
+
+            tx.oncomplete = () => {
+                this.eventBus.emit('photo:saved', { dataUrl });
+                resolve();
+            };
+            tx.onerror = (event) => reject(event.target.error);
+        });
     }
 
-    getAll(cb) {
-        if (!this.state.db) return;
-        const tx = this.state.db.transaction([this.STORE], 'readonly');
-        const req = tx.objectStore(this.STORE).getAll();
-        req.onsuccess = () => cb(req.result.sort((a, b) => new Date(b.date) - new Date(a.date)));
+    getAll() {
+        return new Promise((resolve, reject) => {
+            if (!this.state.db) return reject("Database not initialized");
+            const tx = this.state.db.transaction([this.STORE], 'readonly');
+            const req = tx.objectStore(this.STORE).getAll();
+            req.onsuccess = () => {
+                const sortedPhotos = req.result.sort((a, b) => new Date(b.date) - new Date(a.date));
+                resolve(sortedPhotos);
+            };
+            req.onerror = (event) => reject(event.target.error);
+        });
     }
 
-    delete(id, cb) {
-        const tx = this.state.db.transaction([this.STORE], 'readwrite');
-        tx.objectStore(this.STORE).delete(id);
-        tx.oncomplete = () => {
-            if (cb) cb();
-            this.eventBus.emit('photo:deleted', { id });
-        };
+    delete(id) {
+        return new Promise((resolve, reject) => {
+            if (!this.state.db) return reject("Database not initialized");
+            const tx = this.state.db.transaction([this.STORE], 'readwrite');
+            tx.objectStore(this.STORE).delete(id);
+            tx.oncomplete = () => {
+                this.eventBus.emit('photo:deleted', { id });
+                resolve();
+            };
+            tx.onerror = (event) => reject(event.target.error);
+        });
     }
 
-    clearAll(cb) {
-        const tx = this.state.db.transaction([this.STORE], 'readwrite');
-        tx.objectStore(this.STORE).clear();
-        tx.oncomplete = () => {
-            if (cb) cb();
-            this.eventBus.emit('gallery:cleared');
-        };
+    clearAll() {
+        return new Promise((resolve, reject) => {
+            if (!this.state.db) return reject("Database not initialized");
+            const tx = this.state.db.transaction([this.STORE], 'readwrite');
+            tx.objectStore(this.STORE).clear();
+            tx.oncomplete = () => {
+                this.eventBus.emit('gallery:cleared');
+                resolve();
+            };
+            tx.onerror = (event) => reject(event.target.error);
+        });
     }
 
-    loadLastThumb() {
-        this.getAll((photos) => {
-            if (photos.length > 0) {
-                if(this.dom.imgThumb && this.dom.iconGallery) {
-                    this.dom.imgThumb.src = photos[0].data;
-                    this.dom.imgThumb.classList.remove('hidden');
-                    this.dom.iconGallery.classList.add('hidden');
-                }
-            } else {
-                if(this.dom.imgThumb && this.dom.iconGallery) {
-                    this.dom.imgThumb.classList.add('hidden');
-                    this.dom.iconGallery.classList.remove('hidden');
-                }
-            }
+    getLastPhoto() {
+        return new Promise((resolve, reject) => {
+            this.getAll()
+                .then(photos => {
+                    if (photos.length > 0) {
+                        resolve(photos[0]);
+                    } else {
+                        resolve(null);
+                    }
+                })
+                .catch(reject);
         });
     }
 

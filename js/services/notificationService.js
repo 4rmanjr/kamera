@@ -67,16 +67,14 @@ export class NotificationService {
         const notificationEl = document.createElement('div');
         notificationEl.className = 'notification-item notification-base px-4 py-3 rounded-lg shadow-lg mb-2 transform transition-all duration-300 ease-in-out opacity-0 translate-y-4';
         
-        // Set style berdasarkan tipe notifikasi
-        notificationEl.style.backgroundColor = this.getBgColor(type);
-        notificationEl.style.color = 'white';
+        notificationEl.classList.add(`notification-${type}`);
         
         notificationEl.id = `notification-${id}`;
         notificationEl.innerHTML = `
-            <div style="display: flex; align-items: flex-start;">
-                <span style="margin-right: 8px; font-weight: bold;">${this.getIcon(type)}</span>
-                <span style="flex: 1;">${message}</span>
-                <button class="close-btn" style="font-size: 1.2em; background: none; border: none; color: white; cursor: pointer; margin-left: 8px;">×</button>
+            <div class="flex items-start">
+                <span class="mr-2 font-bold">${this.getIcon(type)}</span>
+                <span class="flex-1">${message}</span>
+                <button class="close-btn text-lg bg-transparent border-none text-white cursor-pointer ml-2">×</button>
             </div>
         `;
 
@@ -110,16 +108,6 @@ export class NotificationService {
             case 'error': return '✗';
             case 'info':
             default: return 'ℹ';
-        }
-    }
-
-    getBgColor(type) {
-        switch (type) {
-            case 'success': return '#22c55e'; // green-500
-            case 'warning': return '#eab308'; // yellow-500
-            case 'error': return '#ef4444'; // red-500
-            case 'info':
-            default: return '#3b82f6'; // blue-500
         }
     }
 

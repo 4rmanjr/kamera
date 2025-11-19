@@ -1,215 +1,149 @@
 /**
  * Virtual Gallery Component
- * Mengimplementasikan virtual scrolling untuk galeri dengan performa tinggi
+ * Implements high-performance virtual scrolling for galleries.
+ * This version uses requestAnimationFrame for throttling and DOM element recycling.
  */
 
 export class VirtualGallery {
-    /**
-     * Membuat instance VirtualGallery
-     * @param {HTMLElement} container - Elemen kontainer untuk galeri
-     * @param {Array} items - Array item yang akan ditampilkan
-     * @param {Object} options - Opsi konfigurasi
-     */
     constructor(container, items = [], options = {}) {
         this.container = container;
         this.items = items;
         this.options = {
-            itemHeight: options.itemHeight || 120, // Tinggi standar item
-            visibleBuffer: options.visibleBuffer || 5, // Jumlah buffer item di atas/bawah
+            itemHeight: options.itemHeight || 150,
             itemRenderer: options.itemRenderer || this.defaultItemRenderer,
             onItemSelect: options.onItemSelect || (() => {}),
-            itemClass: options.itemClass || 'aspect-square bg-gray-900 relative border border-gray-800 cursor-pointer overflow-hidden'
         };
-        
-        this.visibleStart = 0;
-        this.visibleEnd = 0;
+
         this.scrollTop = 0;
-        this.clientHeight = container.clientHeight || 400; // Default fallback
-        
-        // Buat elemen-elemen pendukung
+        this.ticking = false; // Flag for scroll throttling
+
+        // DOM elements
         this.viewport = document.createElement('div');
+        this.content = document.createElement('div');
+        this.itemsContainer = document.createElement('div');
+        
+        // Node pool for DOM recycling
+        this.nodePool = [];
+        this.visibleNodeCount = 0;
+
+        this.initDOM();
+        this.calculateGrid();
+        this.initNodePool();
+        
+        this.update(); // Initial render
+    }
+
+    initDOM() {
         this.viewport.style.position = 'relative';
-        this.viewport.style.overflow = 'auto';
+        this.viewport.style.overflowY = 'auto';
+        this.viewport.style.height = '100%';
         this.container.appendChild(this.viewport);
         
-        this.content = document.createElement('div');
+        this.content.style.position = 'relative';
+        this.content.style.overflow = 'hidden';
         this.viewport.appendChild(this.content);
         
-        // Buat spacer untuk membuat efek scroll
-        this.topSpacer = document.createElement('div');
-        this.topSpacer.style.height = '0px';
-        this.topSpacer.style.width = '100%';
-        this.content.appendChild(this.topSpacer);
-        
-        this.itemsContainer = document.createElement('div');
-        this.itemsContainer.style.display = 'contents';
+        this.itemsContainer.style.position = 'absolute';
+        this.itemsContainer.style.top = '0';
+        this.itemsContainer.style.left = '0';
+        this.itemsContainer.style.width = '100%';
+        this.itemsContainer.style.display = 'grid'; // Assuming grid layout
         this.content.appendChild(this.itemsContainer);
-        
-        this.bottomSpacer = document.createElement('div');
-        this.bottomSpacer.style.height = '0px';
-        this.bottomSpacer.style.width = '100%';
-        this.content.appendChild(this.bottomSpacer);
-        
-        // Bind event listener
-        this.boundHandleScroll = this.handleScroll.bind(this);
-        this.viewport.addEventListener('scroll', this.boundHandleScroll);
-        
-        // Hitung grid layout
-        this.calculateGrid();
+
+        this.boundOnScroll = this.onScroll.bind(this);
+        this.viewport.addEventListener('scroll', this.boundOnScroll, { passive: true });
     }
     
-    /**
-     * Menghitung layout grid berdasarkan ukuran container
-     */
     calculateGrid() {
-        // Jika container adalah grid, kita perlu tahu berapa banyak kolom
-        const computedStyle = window.getComputedStyle(this.container);
-        if (computedStyle.display === 'grid' || this.container.classList.contains('grid')) {
-            // Hitung jumlah kolom berdasarkan grid template
-            const gridTemplateColumns = computedStyle.gridTemplateColumns;
-            const cols = gridTemplateColumns.split(' ').length || 3; // Default 3 kolom
-            this.itemsPerRow = cols;
-            this.visibleRows = Math.ceil((this.clientHeight / this.options.itemHeight) + 2);
-            this.visibleItems = this.visibleRows * this.itemsPerRow;
-        } else {
-            // Jika bukan grid, asumsikan 1 item per baris
-            this.itemsPerRow = 1;
-            this.visibleItems = Math.ceil((this.clientHeight / this.options.itemHeight) + 2);
+        const containerWidth = this.container.clientWidth;
+        const itemWidth = this.options.itemHeight; // Assuming square items
+        this.itemsPerRow = Math.floor(containerWidth / itemWidth) || 1;
+        const visibleRows = Math.ceil(this.viewport.clientHeight / this.options.itemHeight) + 1; // +1 buffer row
+        this.visibleNodeCount = visibleRows * this.itemsPerRow;
+        
+        this.itemsContainer.style.gridTemplateColumns = `repeat(${this.itemsPerRow}, 1fr)`;
+    }
+
+    initNodePool() {
+        for (let i = 0; i < this.visibleNodeCount; i++) {
+            const node = this.options.itemRenderer(null, i); // Create placeholder node
+            node.style.position = 'absolute';
+            node.style.height = `${this.options.itemHeight}px`;
+            node.style.width = `${100 / this.itemsPerRow}%`;
+            this.itemsContainer.appendChild(node);
+            this.nodePool.push(node);
         }
     }
-    
-    /**
-     * Renderer default untuk item galeri
-     */
-    defaultItemRenderer(item, index) {
-        const div = document.createElement('div');
-        div.className = this.options.itemClass;
-        div.innerHTML = `<img data-src="${item.data}" class="w-full h-full object-cover opacity-0 transition-opacity duration-300" loading="lazy" alt="Foto galeri ${item.id}">`;
-        div.onclick = () => this.options.onItemSelect(item, index);
-        return div;
-    }
-    
-    /**
-     * Menangani event scroll
-     */
-    handleScroll() {
+
+    onScroll() {
         this.scrollTop = this.viewport.scrollTop;
-        this.clientHeight = this.viewport.clientHeight;
-        
-        this.calculateVisibleRange();
-        this.renderVisibleItems();
+        if (!this.ticking) {
+            window.requestAnimationFrame(() => {
+                this.update();
+                this.ticking = false;
+            });
+            this.ticking = true;
+        }
     }
-    
-    /**
-     * Menghitung rentang item yang terlihat
-     */
-    calculateVisibleRange() {
-        const startIndex = Math.floor(this.scrollTop / this.options.itemHeight);
-        this.visibleStart = Math.max(0, startIndex - this.options.visibleBuffer);
-        this.visibleEnd = Math.min(
-            this.items.length,
-            this.visibleStart + this.visibleItems + (this.options.visibleBuffer * 2)
-        );
-    }
-    
-    /**
-     * Merender item-item yang terlihat
-     */
-    renderVisibleItems() {
-        // Hapus item-item sebelumnya
-        this.itemsContainer.innerHTML = '';
-        
-        // Update spacer
-        const topSpacerHeight = this.visibleStart * this.options.itemHeight;
-        this.topSpacer.style.height = `${topSpacerHeight}px`;
-        
-        const itemsToRender = this.items.slice(this.visibleStart, this.visibleEnd);
-        
-        // Tambahkan item yang terlihat
-        itemsToRender.forEach((item, index) => {
-            const absoluteIndex = this.visibleStart + index;
-            const itemElement = this.options.itemRenderer(item, absoluteIndex);
-            this.itemsContainer.appendChild(itemElement);
+
+    update() {
+        const totalRows = Math.ceil(this.items.length / this.itemsPerRow);
+        const totalHeight = totalRows * this.options.itemHeight;
+        this.content.style.height = `${totalHeight}px`;
+
+        const firstVisibleRow = Math.floor(this.scrollTop / this.options.itemHeight);
+        const firstVisibleIndex = firstVisibleRow * this.itemsPerRow;
+
+        for (let i = 0; i < this.visibleNodeCount; i++) {
+            const itemIndex = firstVisibleIndex + i;
+            const node = this.nodePool[i];
             
-            // Aktifkan lazy loading untuk item ini
-            if (itemElement.querySelector && itemElement.querySelector('img[data-src]')) {
-                this.loadImageWhenVisible(itemElement.querySelector('img[data-src]'));
+            if (itemIndex < this.items.length) {
+                const item = this.items[itemIndex];
+                node.style.display = 'block';
+
+                // Update node content
+                const img = node.querySelector('img');
+                if (img) {
+                    img.dataset.src = item.data;
+                    img.alt = `Foto galeri ${item.id}`;
+                    this.loadImageWhenVisible(img);
+                }
+                node.dataset.itemId = item.id; // For click handler
+                node.onclick = () => this.options.onItemSelect(item, itemIndex);
+
+                // Update node position
+                const row = Math.floor(itemIndex / this.itemsPerRow);
+                const col = itemIndex % this.itemsPerRow;
+                node.style.transform = `translateY(${row * this.options.itemHeight}px)`;
+                node.style.left = `${col * (100 / this.itemsPerRow)}%`;
+
+            } else {
+                node.style.display = 'none';
             }
-        });
-        
-        // Hitung tinggi bottom spacer
-        const bottomSpacerHeight = Math.max(0, (this.items.length - this.visibleEnd) * this.options.itemHeight);
-        this.bottomSpacer.style.height = `${bottomSpacerHeight}px`;
+        }
     }
-    
-    /**
-     * Fungsi untuk memuat gambar saat visible
-     */
+
     loadImageWhenVisible(img) {
-        // Implementasi sederhana - sebenarnya bisa menggunakan IntersectionObserver
         const src = img.dataset.src;
-        if (src) {
+        if (src && img.src !== src) { // Avoid reloading
             img.src = src;
             img.onload = () => {
                 img.removeAttribute('data-src');
-                img.classList.remove('opacity-0');
+                img.style.opacity = '1';
             };
         }
     }
-    
-    /**
-     * Memperbarui data galeri
-     */
-    updateData(newItems) {
-        this.items = newItems;
-        this.calculateGrid();
-        this.calculateVisibleRange();
-        this.renderVisibleItems();
-        
-        // Update tinggi total konten
-        const totalHeight = this.items.length * this.options.itemHeight;
-        this.bottomSpacer.style.height = `${Math.max(0, totalHeight - (this.visibleEnd * this.options.itemHeight))}px`;
+
+    defaultItemRenderer() {
+        const div = document.createElement('div');
+        div.className = 'aspect-square bg-gray-900 relative border border-gray-800 cursor-pointer overflow-hidden';
+        div.innerHTML = `<img class="w-full h-full object-cover opacity-0 transition-opacity duration-300" loading="lazy">`;
+        return div;
     }
-    
-    /**
-     * Mengatur event listener untuk Intersection Observer (opsional)
-     */
-    setupIntersectionObserver() {
-        if (!('IntersectionObserver' in window)) return;
-        
-        const observerCallback = (entries, observer) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const img = entry.target;
-                    const src = img.dataset.src;
-                    if (src) {
-                        img.src = src;
-                        img.onload = () => {
-                            img.removeAttribute('data-src');
-                            img.classList.remove('opacity-0');
-                        };
-                        observer.unobserve(img);
-                    }
-                }
-            });
-        };
-        
-        this.imageObserver = new IntersectionObserver(observerCallback, {
-            root: this.viewport,
-            rootMargin: '100px' // Muat lebih awal
-        });
-    }
-    
-    /**
-     * Membersihkan resources
-     */
+
     destroy() {
-        if (this.imageObserver) {
-            this.imageObserver.disconnect();
-        }
-        if (this.viewport && this.boundHandleScroll) {
-            this.viewport.removeEventListener('scroll', this.boundHandleScroll);
-        }
+        this.viewport.removeEventListener('scroll', this.boundOnScroll);
         if (this.container) {
             this.container.innerHTML = '';
         }

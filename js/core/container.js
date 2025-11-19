@@ -13,7 +13,7 @@ import { CanvasProcessorService } from '../services/canvasProcessor.js';
 import { GalleryController } from '../components/gallery.js';
 import { PreviewController } from '../components/preview.js';
 import { UIController } from '../components/ui.js';
-import { Utils } from '../utils/utils.js';
+import * as utils from '../utils/utils.js';
 import { QRCodeGenerator } from '../models/qrCodeGenerator.js';
 import { NotificationService } from '../services/notificationService.js';
 
@@ -24,7 +24,7 @@ export class DIContainer {
         this.eventBus = eventBus;
         this.dom = DOM;
         this.state = State;
-        this.utils = Utils;
+        this.utils = utils;
     }
 
     // Membuat instance dari semua layanan dengan dependency injection yang benar
@@ -49,7 +49,8 @@ export class DIContainer {
             state: this.state,
             dom: this.dom,
             eventBus: this.eventBus,
-            qrCodeGenerator
+            qrCodeGenerator,
+            storageService // Inject storage service
         });
         
         const cameraService = new CameraService({ 

@@ -217,20 +217,31 @@ export class GalleryController {
         // Emit an event to UI controller to show the confirmation dialog
         this.eventBus.emit('gallery:deleteSelected', {
             count: this.selectedItems.size,
-            callback: () => {
+            callback: async () => { // Make the callback async
                 const selectedPhotoIds = Array.from(this.selectedItems);
 
-                // Delete each selected photo
-                selectedPhotoIds.forEach(id => {
-                    this.storageService.delete(id, () => {
-                        // Remove from selection set
-                        this.selectedItems.delete(id);
-                    });
-                });
+                try {
+                    // Create an array of delete promises
+                    const deletePromises = selectedPhotoIds.map(id => this.storageService.delete(id));
 
-                // Exit selection mode and refresh gallery
-                this.exitSelectionMode();
-                this.load();
+                    // Wait for all delete operations to complete
+                    await Promise.all(deletePromises);
+
+                    // Now that all are deleted, clear the selection
+                    this.selectedItems.clear();
+
+                    // Exit selection mode and refresh gallery
+                    this.exitSelectionMode();
+                    this.load();
+
+                } catch (error) {
+                    console.error("Error deleting selected items:", error);
+                    // Optionally show a notification to the user
+                    this.eventBus.emit('notification:show', {
+                        message: 'Gagal menghapus beberapa foto.',
+                        type: 'error'
+                    });
+                }
             }
         });
     }
@@ -352,25 +363,31 @@ export class GalleryController {
                     });
                 }
             } else {
-                // Untuk jumlah foto sedikit, gunakan metode tradisional
+                // Untuk jumlah foto sedikit, gunakan metode map dan innerHTML untuk performa
                 if (this.dom.galleryGrid) {
-                    this.dom.galleryGrid.innerHTML = '';
-                    const fragment = document.createDocumentFragment();
+                    const galleryHTML = photos.map(p => `
+                        <div class="aspect-square bg-gray-900 relative border border-gray-800 cursor-pointer overflow-hidden" data-photo-id="${p.id}">
+                            <img data-src="${p.data}" class="w-full h-full object-cover opacity-0 transition-opacity duration-300" loading="lazy" alt="Foto galeri ${p.id}">
+                        </div>
+                    `).join('');
+                    
+                    this.dom.galleryGrid.innerHTML = galleryHTML;
 
-                    photos.forEach(p => {
-                        const div = document.createElement('div');
-                        div.className = 'aspect-square bg-gray-900 relative border border-gray-800 cursor-pointer overflow-hidden';
-                        div.innerHTML = `<img data-src="${p.data}" class="w-full h-full object-cover opacity-0 transition-opacity duration-300" loading="lazy" alt="Foto galeri ${p.id}">`;
-                        div.onclick = () => {
-                            if (this.previewController) {
-                                this.previewController.openWithPhotos(p, this.currentPhotos);
-                            } else {
-                                console.warn('Preview controller not initialized');
+                    // Gunakan event delegation untuk menangani klik, ini lebih efisien
+                    if (!this.galleryGridClickHandler) {
+                        this.galleryGridClickHandler = (e) => {
+                            const item = e.target.closest('[data-photo-id]');
+                            if (!item) return;
+
+                            const photoId = parseInt(item.dataset.photoId, 10);
+                            const photo = this.currentPhotos.find(p => p.id === photoId);
+
+                            if (photo && this.previewController) {
+                                this.previewController.openWithPhotos(photo, this.currentPhotos);
                             }
                         };
-                        fragment.appendChild(div);
-                    });
-                    this.dom.galleryGrid.appendChild(fragment);
+                        this.dom.galleryGrid.addEventListener('click', this.galleryGridClickHandler);
+                    }
 
                     // Setup Intersection Observer untuk lazy loading
                     if (!this.state.galleryObserver) {
