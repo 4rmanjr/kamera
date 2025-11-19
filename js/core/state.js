@@ -17,6 +17,7 @@ export const State = {
         textSize: localStorage.getItem('gc_textSize') || 'm',
         textPos: localStorage.getItem('gc_textPos') || 'bl',
         logoPos: localStorage.getItem('gc_logoPos') || 'tr',
+        logoSize: localStorage.getItem('gc_logoSize') || 'm', // Add logo size setting
         qrCodeEnabled: localStorage.getItem('gc_qrCodeEnabled') !== 'false', // Default true
         qrCodePos: localStorage.getItem('gc_qrCodePos') || 'br',
         qrCodeSize: localStorage.getItem('gc_qrCodeSize') || 'm'

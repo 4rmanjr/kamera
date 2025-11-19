@@ -116,7 +116,10 @@ export async function drawLogo(ctx, logoImg, settings, dimensions, textMetrics) 
     const { width: canvasWidth, height: canvasHeight } = dimensions;
     const { textBlockHeight, margin, lineHeight } = textMetrics;
     
-    let logoW = canvasWidth * 0.20;
+    // Determine logo width based on logoSize setting
+    const sizeMultipliers = { s: 0.2, m: 0.25, l: 0.3 };
+    const logoWidthMultiplier = sizeMultipliers[settings.logoSize] || sizeMultipliers.m;
+    let logoW = canvasWidth * logoWidthMultiplier;
     let logoH = logoW / (logoImg.width / logoImg.height);
     
     const logoPosCoords = getPosition(margin, canvasWidth, canvasHeight, settings.logoPos);

@@ -259,6 +259,11 @@ export class UIController {
             this.updateSettingsUI();
         });
 
+        document.querySelectorAll('.btn-logo-size').forEach(btn => btn.onclick = () => {
+            this.utils.updateSetting(this.state.settings, 'logoSize', btn.dataset.size);
+            this.updateSettingsUI();
+        });
+
         document.querySelectorAll('.btn-pos').forEach(btn => btn.onclick = () => {
             const type = btn.dataset.type;
             const pos = btn.dataset.pos;
@@ -322,6 +327,10 @@ export class UIController {
     updateSettingsUI() {
         document.querySelectorAll('.btn-size').forEach(b => 
             b.classList.toggle('btn-active', b.dataset.size === this.state.settings.textSize)
+        );
+
+        document.querySelectorAll('.btn-logo-size').forEach(b => 
+            b.classList.toggle('btn-active', b.dataset.size === this.state.settings.logoSize)
         );
 
         document.querySelectorAll('.btn-pos').forEach(b => {
