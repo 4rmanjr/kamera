@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  base: '/kamera/',
   // Konfigurasi dasar untuk aplikasi HTML5 Anda
   root: '.', // Folder root proyek
 
